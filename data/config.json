@@ -1,0 +1,12 @@
+{
+  "baseUrl": "cli://",
+  "shortCodeLength": 7,
+  "defaultTtlHours": 24,
+  "defaultClickLimit": 10,
+  "maxUrlLength": 2048,
+  "cleanupOnEachOp": true,
+  "allowOwnerEditLimit": true,
+  "hardDeleteExpired": true,
+  "eventsLogEnabled": true,
+  "clockSkewToleranceSec": 2
+}

@@ -1,0 +1,9 @@
+[
+  {
+    "ts": "2025-11-04T13:04:52.1717937",
+    "type": "LIMIT_REACHED",
+    "ownerUuid": "f2e3032b-a54d-41d6-ade0-db2ed170a6fe",
+    "shortCode": "edfsDce",
+    "message": "Click limit reached (1/1)"
+  }
+]
