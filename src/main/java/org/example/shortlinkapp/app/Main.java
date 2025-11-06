@@ -15,7 +15,7 @@ public class Main {
 
         // 3) Welcome banner
         System.out.println("========================================");
-        System.out.println(" ShortLink CLI (Java) — minimal skeleton");
+        System.out.println(" ShortLink CLI (Java)");
         System.out.println("========================================");
         System.out.println("User UUID: " + userUuid);
         System.out.println("Config loaded from: " + ConfigJson.getConfigPath().toAbsolutePath());

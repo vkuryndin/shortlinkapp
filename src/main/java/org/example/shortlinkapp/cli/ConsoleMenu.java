@@ -356,6 +356,7 @@ public class ConsoleMenu {
             System.out.println("[2] Mark/cleanup limit-reached");
             System.out.println("[3] Validate JSON integrity");
             System.out.println("[4] Statistics");
+            System.out.println("[5] View Event Log (global)");
             System.out.println("[0] Back");
             String c = InputUtils.readTrimmed("Select: ");
             if (c == null || "0".equals(c)) return;
@@ -365,6 +366,7 @@ public class ConsoleMenu {
                 case "2" -> shortLinkService.cleanupLimitReached();
                 case "3" -> actionValidateJson();
                 case "4" -> actionStatistics();
+                case "5" -> actionViewEventLogGlobal();
                 default -> System.out.println("Unknown option. Try again.");
             }
         }
@@ -641,6 +643,39 @@ public class ConsoleMenu {
         try { java.util.UUID.fromString(s); return true; }
         catch (Exception e) { return false; }
     }
+
+    private void actionViewEventLogGlobal() {
+        if (!config.eventsLogEnabled) {
+            System.out.println("Events/notifications are disabled by configuration.");
+            return;
+        }
+        String limStr = InputUtils.readTrimmed("How many latest events to show? (default 50): ");
+        int limit = 50;
+        if (limStr != null && !limStr.isBlank()) {
+            try { limit = Math.max(1, Integer.parseInt(limStr.trim())); } catch (NumberFormatException ignored) {}
+        }
+
+        var list = events.recentGlobal(limit);
+        if (list.isEmpty()) {
+            System.out.println("No events yet.");
+            return;
+        }
+
+        System.out.println(pad("time", 16) + " " + pad("type", 14) + " " + pad("ownerUuid", 36) + " " + pad("shortCode", 10) + " message");
+        System.out.println("-".repeat(16 + 1 + 14 + 1 + 36 + 1 + 10 + 1 + 50));
+
+        for (var e : list) {
+            String time = (e.ts == null) ? "-" : DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm").format(e.ts);
+            System.out.println(
+                    pad(time, 16) + " " +
+                            pad(String.valueOf(e.type), 14) + " " +
+                            pad(e.ownerUuid == null ? "-" : e.ownerUuid, 36) + " " +
+                            pad(e.shortCode == null ? "-" : e.shortCode, 10) + " " +
+                            (e.message == null ? "-" : e.message)
+            );
+        }
+    }
+
 
 
 }

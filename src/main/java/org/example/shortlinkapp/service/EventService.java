@@ -53,5 +53,13 @@ public class EventService {
                 .limit(limit)
                 .collect(Collectors.toList());
     }
+    public java.util.List<EventLog> recentGlobal(int limit) {
+        if (!enabled) return java.util.List.of();
+        return repo.list().stream()
+                .sorted(java.util.Comparator.comparing((EventLog e) -> e.ts).reversed())
+                .limit(Math.max(1, limit))
+                .collect(java.util.stream.Collectors.toList());
+    }
+
 
 }

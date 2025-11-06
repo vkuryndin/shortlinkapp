@@ -76,6 +76,7 @@ public class ShortLinkService {
         l.status = Status.ACTIVE;
 
         repo.add(l);
+        if (events != null) events.info(l.ownerUuid, l.shortCode, "CREATE " + cfg.baseUrl + l.shortCode);
         return l;
     }
 
@@ -142,6 +143,10 @@ public class ShortLinkService {
         String url = l.longUrl;
         if (Desktop.isDesktopSupported()) {
             try {
+                if (events != null) {
+                    String lim = (l.clickLimit == null) ? "∞" : String.valueOf(l.clickLimit);
+                    events.info(l.ownerUuid, l.shortCode, "OPEN " + l.clickCount + "/" + lim);
+                }
                 Desktop.getDesktop().browse(new URI(url));
                 System.out.println("Opening in browser: " + url);
             } catch (Exception e) {
@@ -167,6 +172,9 @@ public class ShortLinkService {
         boolean ok = repo.deleteByShortCodeForOwner(code, ownerUuid);
         if (ok) {
             System.out.println("Link deleted: " + cfg.baseUrl + code);
+            if (events != null) {
+                events.info(ownerUuid, code, "DELETE " + cfg.baseUrl + code);
+            }
         } else {
             System.out.println("Delete failed (race or not found).");
         }
@@ -174,6 +182,12 @@ public class ShortLinkService {
     }
 
     public boolean editClickLimit(String rawCode, Integer newLimit) {
+        // ЕДИНОЕ ПРАВИЛО: любые изменения лимита разрешены только если включено в конфиге
+        if (!cfg.allowOwnerEditLimit) {
+            System.out.println("Editing click limit is disabled by configuration.");
+            return false;
+        }
+
         String code = normalizeCode(rawCode);
         var opt = repo.findByShortCode(code);
         if (opt.isEmpty()) {
@@ -189,10 +203,6 @@ public class ShortLinkService {
 
         // 'unlimited' → newLimit == null
         if (newLimit == null) {
-            if (!cfg.allowOwnerEditLimit) {
-                System.out.println("Editing click limit is disabled by configuration.");
-                return false;
-            }
             l.clickLimit = null;
         } else {
             if (newLimit <= 0) {
@@ -206,28 +216,33 @@ public class ShortLinkService {
             l.clickLimit = newLimit;
         }
 
-        // Пересчитать статус (если ранее был LIMIT_REACHED, а новый лимит больше — вернуть ACTIVE, если не истёк TTL)
+        // Пересчитать статус
         var now = java.time.LocalDateTime.now();
         if (l.expiresAt != null && org.example.shortlinkapp.util.TimeUtils.isExpired(now, l.expiresAt)) {
-            l.status = Status.EXPIRED;
+            l.status = org.example.shortlinkapp.model.Status.EXPIRED;
         } else if (l.clickLimit != null && l.clickCount >= l.clickLimit) {
-            l.status = Status.LIMIT_REACHED;
+            l.status = org.example.shortlinkapp.model.Status.LIMIT_REACHED;
         } else {
-            l.status = Status.ACTIVE;
+            l.status = org.example.shortlinkapp.model.Status.ACTIVE;
         }
 
         repo.update(l);
+        if (events != null) {
+            String val = (l.clickLimit == null) ? "unlimited" : String.valueOf(l.clickLimit);
+            events.info(l.ownerUuid, l.shortCode, "EDIT_LIMIT " + val);
+        }
         System.out.println("Limit for " + cfg.baseUrl + l.shortCode + " set to "
                 + (l.clickLimit == null ? "unlimited" : l.clickLimit) + ".");
         return true;
     }
+
     public int cleanupExpired() {
-        int n = repo.cleanupExpired(LocalDateTime.now(), cfg.hardDeleteExpired);
+        int n = cleanupExpiredAndLog(false);
         System.out.println("Expired cleaned: " + n);
         return n;
     }
     public int cleanupLimitReached() {
-        int n = repo.cleanupLimitReached(cfg.hardDeleteExpired);
+        int n = cleanupLimitReachedAndLog(false);
         System.out.println("Limit-reached cleaned: " + n);
         return n;
     }
@@ -246,7 +261,13 @@ public class ShortLinkService {
                 gson.toJson(mine, bw);
             }
 
+            //logging event
+            if (events != null) {
+                events.info(ownerUuid, "-", "EXPORT " + mine.size());
+            }
+
             System.out.println("Exported " + mine.size() + " link(s) to: " + out.toAbsolutePath());
+
             return out;
         } catch (Exception e) {
             System.out.println("Export failed: " + e.getMessage());
@@ -304,13 +325,13 @@ public class ShortLinkService {
     }
 
     public int bulkDeleteExpiredMine() {
-        int n = repo.cleanupExpiredForOwner(java.time.LocalDateTime.now(), ownerUuid, cfg.hardDeleteExpired);
+        int n = cleanupExpiredAndLog(true);
         System.out.println("Mine: expired cleaned: " + n);
         return n;
     }
 
     public int bulkDeleteLimitReachedMine() {
-        int n = repo.cleanupLimitReachedForOwner(ownerUuid, cfg.hardDeleteExpired);
+        int n = cleanupLimitReachedAndLog(true);
         System.out.println("Mine: limit-reached cleaned: " + n);
         return n;
     }
@@ -399,14 +420,71 @@ public class ShortLinkService {
     }
     private void autoCleanupIfEnabled() {
         if (!cfg.cleanupOnEachOp) return;
-        var now = java.time.LocalDateTime.now();
-        // Глобальная очистка: TTL + limit-reached
-        repo.cleanupExpired(now, cfg.hardDeleteExpired);
-        repo.cleanupLimitReached(cfg.hardDeleteExpired);
+        cleanupExpiredAndLog(false);
+        cleanupLimitReachedAndLog(false);
     }
 
     public void reloadConfig(ConfigJson newCfg) {
         if (newCfg != null) this.cfg = newCfg;
     }
+
+    // Локальная очистка с логированием событий
+    private int cleanupExpiredAndLog(boolean onlyMine) {
+        var now = java.time.LocalDateTime.now();
+        int count = 0;
+        var scope = onlyMine ? repo.listByOwner(ownerUuid) : repo.listAll();
+
+        // копию не обязательно делать, но безопасно, если будем удалять
+        for (var l : new java.util.ArrayList<>(scope)) {
+            if (l == null || l.status == org.example.shortlinkapp.model.Status.DELETED) continue;
+            if (l.expiresAt != null && org.example.shortlinkapp.util.TimeUtils.isExpired(now, l.expiresAt)) {
+                if (cfg.hardDeleteExpired) {
+                    // удаляем запись и логируем событие EXPIRED
+                    if (repo.deleteByShortCodeForOwner(l.shortCode, l.ownerUuid)) {
+                        count++;
+                        if (events != null) events.expired(l.ownerUuid, l.shortCode, "Auto-cleanup: expired at " + l.expiresAt);
+                    }
+                } else {
+                    if (l.status != org.example.shortlinkapp.model.Status.EXPIRED) {
+                        l.status = org.example.shortlinkapp.model.Status.EXPIRED;
+                        repo.update(l);
+                        count++;
+                        if (events != null) events.expired(l.ownerUuid, l.shortCode, "Auto-cleanup: expired at " + l.expiresAt);
+                    }
+                }
+            }
+        }
+        return count;
+    }
+
+    private int cleanupLimitReachedAndLog(boolean onlyMine) {
+        int count = 0;
+        var scope = onlyMine ? repo.listByOwner(ownerUuid) : repo.listAll();
+
+        for (var l : scope) {
+            if (l == null || l.status == org.example.shortlinkapp.model.Status.DELETED) continue;
+            if (l.clickLimit != null && l.clickCount >= l.clickLimit) {
+                if (cfg.hardDeleteExpired) { // используем тот же флаг для «жёсткой» очистки
+                    if (repo.deleteByShortCodeForOwner(l.shortCode, l.ownerUuid)) {
+                        count++;
+                        if (events != null) events.limitReached(
+                                l.ownerUuid, l.shortCode,
+                                "Auto-cleanup: limit reached " + l.clickCount + "/" + l.clickLimit);
+                    }
+                } else {
+                    if (l.status != org.example.shortlinkapp.model.Status.LIMIT_REACHED) {
+                        l.status = org.example.shortlinkapp.model.Status.LIMIT_REACHED;
+                        repo.update(l);
+                        count++;
+                        if (events != null) events.limitReached(
+                                l.ownerUuid, l.shortCode,
+                                "Auto-cleanup: limit reached " + l.clickCount + "/" + l.clickLimit);
+                    }
+                }
+            }
+        }
+        return count;
+    }
+
 
 }
