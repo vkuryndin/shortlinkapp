@@ -26,6 +26,7 @@ repositories {
 
 dependencies {
     implementation("com.google.code.gson:gson:2.10.1")
+    implementation("org.mindrot:jbcrypt:0.4")
 }
 
 /** Testing, Gradle 9 compatible */
@@ -44,9 +45,9 @@ testing {
     }
 }
 
-/** ---------- Jacoco: распаковать ВНУТРЕННИЙ агент и прокинуть путь второму JVM ---------- */
+/** ---------- Jacoco: unpack internal agent and give it to the second JVM ---------- */
 
-// 1) Копируем ВНУТРЕННИЙ jacocoagent.jar в build/jacoco/
+// 1) copying internal jacocoagent.jar to build/jacoco/
 val unpackJacocoAgent by tasks.register<Copy>("unpackJacocoAgent") {
     val agentZip = configurations.getByName("jacocoAgent").singleFile
     from(zipTree(agentZip)) { include("jacocoagent.jar") }
@@ -54,9 +55,9 @@ val unpackJacocoAgent by tasks.register<Copy>("unpackJacocoAgent") {
     rename { "jacocoagent.jar" }
 }
 
-// 2) Перед запуском тестов:
-//    - путь к внутреннему агенту: build/jacoco/jacocoagent.jar
-//    - отдельный файл покрытия для дочернего JVM: build/jacoco/jacoco-it.exec
+// 2) Before launching test:
+//    - path to the intertal agent: build/jacoco/jacocoagent.jar
+//    - separate coverage file for child JVM: build/jacoco/jacoco-it.exec
 tasks.test {
     dependsOn(unpackJacocoAgent)
     useJUnitPlatform()
@@ -70,7 +71,7 @@ tasks.test {
     }
 }
 
-// Чтобы отчёт всегда собирался после тестов
+// create a report always after test
 tasks.withType<Test>().configureEach {
     jvmArgs("-Dfile.encoding=UTF-8")
     systemProperty("file.encoding", "UTF-8")
@@ -92,7 +93,7 @@ checkstyle {
     maxWarnings = 0
 }
 
-/** SpotBugs — как было */
+/** SpotBugs — feature */
 spotbugs {
     ignoreFailures = false
 }
@@ -126,7 +127,7 @@ spotless {
 tasks.jacocoTestReport {
     dependsOn(tasks.test)
 
-    // соберём ВСЕ exec/ec, включая jacoco-it.exec
+    // collect all  exec/ec, including jacoco-it.exec
     executionData.setFrom(
         fileTree(layout.buildDirectory.dir("jacoco")) {
             //executionData.setFrom(fileTree(layout.buildDirectory.asFile.get()) {
@@ -156,7 +157,7 @@ tasks.withType<JavaCompile>().configureEach {
 val jacocoCoverage by tasks.register<JacocoCoverageVerification>("jacocoCoverage") {
     dependsOn(tasks.test)
 
-    // Берём все .exec/.ec, включая твой jacoco-it.exec
+    // take all .exec/.ec, including jacoco-it.exec
     executionData.setFrom(
         fileTree(layout.buildDirectory.dir("jacoco")) {
             include("**/*.exec", "**/*.ec")
@@ -167,7 +168,7 @@ val jacocoCoverage by tasks.register<JacocoCoverageVerification>("jacocoCoverage
 
     violationRules {
         rule {
-            // we can change counter to INSTRUCTION/BRANCH if neeeded
+            // we can change counter to INSTRUCTION/BRANCH if needed
             limit {
                 counter = "LINE"
                 value = "COVEREDRATIO"
@@ -177,7 +178,7 @@ val jacocoCoverage by tasks.register<JacocoCoverageVerification>("jacocoCoverage
     }
 }
 
-// all checks,  report and verification
+// all checks, report and verification
 tasks.named("check") {
     dependsOn(
         "spotlessCheck",
