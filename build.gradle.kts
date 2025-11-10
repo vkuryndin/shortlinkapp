@@ -26,7 +26,7 @@ repositories {
 
 dependencies {
     implementation("com.google.code.gson:gson:2.10.1")
-    implementation("org.mindrot:jbcrypt:0.4")
+    compileOnly("com.github.spotbugs:spotbugs-annotations:4.8.6") //enabling spotbugs annotations
 }
 
 /** Testing, Gradle 9 compatible */

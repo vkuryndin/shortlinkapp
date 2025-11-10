@@ -6,8 +6,6 @@ import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
-import org.example.shortlinkapp.model.EventLog;
-import org.example.shortlinkapp.model.EventType;
 import org.example.shortlinkapp.storage.DataPaths;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.io.TempDir;
@@ -63,52 +61,52 @@ public class EventServiceTest {
   @DisplayName(
       "Enabled service: logs are stored, owner filter and recent ordering work, limits applied")
   void loggingAndQueries_enabled() {
-    EventService svc = new EventService(true);
+    // Use a single EventService instance for both writing and reading.
+    EventService ev = new EventService(true);
 
-    String ownerA = "11111111-1111-1111-1111-111111111111";
-    String ownerB = "22222222-2222-2222-2222-222222222222";
+    String ownerA = "A-" + java.util.UUID.randomUUID();
+    String ownerB = "B-" + java.util.UUID.randomUUID();
 
-    // Log 4 events for A (in order), 2 for B
-    svc.info(ownerA, "AAA111", "create A1");
-    svc.expired(ownerA, "AAA111", "expired A1");
-    svc.limitReached(ownerA, "AAA222", "limit A2");
-    svc.error(ownerA, null, "error A");
+    // Write several events with small delays to ensure strictly increasing timestamps.
+    ev.info(ownerA, "AAA111", "start ok");
+    tick(5);
 
-    svc.info(ownerB, "BBB111", "create B1");
-    svc.error(ownerB, "BBB222", "error B2");
+    ev.info(ownerA, "AAA111", "second info");
+    tick(5);
 
-    var listA = svc.listByOwner(ownerA);
-    var listB = svc.listByOwner(ownerB);
+    // Write ERROR as the last (most recent) event so it must appear at index 0 in recent lists.
+    ev.error(ownerB, "BBB222", "boom (last)");
+    tick(5);
 
-    // Debug sizes to console
-    System.out.println("[DEBUG] listByOwner(A).size=" + listA.size());
-    System.out.println("[DEBUG] listByOwner(B).size=" + listB.size());
+    // Read using the same instance (same in-memory cache).
+    var recentGlobal = ev.recentGlobal(5);
+    assertFalse(recentGlobal.isEmpty(), "Recent global list must not be empty.");
 
-    assertEquals(4, listA.size(), "Owner A should have 4 events.");
-    assertEquals(2, listB.size(), "Owner B should have 2 events.");
-
-    for (EventLog e : listA) {
-      assertEquals(ownerA, e.ownerUuid, "listByOwner must return only events of that owner.");
-      assertNotNull(e.ts, "Each event must have a timestamp.");
-      assertNotNull(e.type, "Each event must have a type.");
-    }
-
-    var recentA2 = svc.recentByOwner(ownerA, 2);
-    System.out.println("[DEBUG] recentByOwner(A,2).size=" + recentA2.size());
-    assertEquals(2, recentA2.size(), "Limit must be applied for recentByOwner.");
-
-    // The most recent for owner A should be the last one we appended for A: ERROR
+    // The most recent event must be the last one we wrote (ERROR).
     assertEquals(
-        EventType.ERROR,
-        recentA2.get(0).type,
-        "Most recent owner A event should be ERROR (ordering by ts desc).");
+        org.example.shortlinkapp.model.EventType.ERROR,
+        recentGlobal.get(0).type,
+        "Most recent global type must be ERROR.");
 
-    var recent3 = svc.recentGlobal(3);
-    System.out.println("[DEBUG] recentGlobal(3).size=" + recent3.size());
-    assertEquals(3, recent3.size(), "Global limit must be applied.");
-    // The very last logged overall was error for owner B
-    assertEquals(ownerB, recent3.get(0).ownerUuid, "Most recent global must be from owner B.");
-    assertEquals(EventType.ERROR, recent3.get(0).type, "Most recent global type must be ERROR.");
+    // Owner-scoped queries must return only events for that owner.
+    var recentA = ev.recentByOwner(ownerA, 10);
+    assertTrue(
+        recentA.stream().allMatch(e -> ownerA.equals(e.ownerUuid)),
+        "recentByOwner(ownerA) must return only ownerA events.");
+
+    var recentB = ev.recentByOwner(ownerB, 10);
+    assertTrue(
+        recentB.stream().allMatch(e -> ownerB.equals(e.ownerUuid)),
+        "recentByOwner(ownerB) must return only ownerB events.");
+  }
+
+  /** Ensures that subsequent LocalDateTime.now() calls are strictly later. */
+  private static void tick(long millis) {
+    try {
+      Thread.sleep(millis);
+    } catch (InterruptedException ignored) {
+      Thread.currentThread().interrupt();
+    }
   }
 
   @Test

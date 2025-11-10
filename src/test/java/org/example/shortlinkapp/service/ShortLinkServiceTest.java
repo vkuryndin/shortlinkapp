@@ -19,17 +19,17 @@ import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.io.TempDir;
 
 /**
- * Working, isolated tests for {@link ShortLinkService}.
+ * Isolated integration tests for {@link ShortLinkService}: core flows + cleanup paths.
  *
  * <p><b>Isolation & stability:</b>
  *
  * <ul>
- *   <li>All JSON files are written into a sandbox by overriding {@code user.dir} to
- *       {@code @TempDir}.
- *   <li>{@code java.awt.headless=true} ensures {@code Desktop.isDesktopSupported()} is false, so
- *       {@link ShortLinkService#openShortLink(String)} prints “Copy and open manually” and never
- *       tries to open a real browser.
- *   <li>We seed {@code users.json} explicitly, because validation and ownership checks rely on it.
+ *   <li>Все JSON-файлы пишутся в песочницу: переопределяем {@code user.dir} на {@code @TempDir}.
+ *   <li>{@code java.awt.headless=true} гарантирует, что {@code Desktop.isDesktopSupported()} ложно,
+ *       поэтому {@link ShortLinkService#openShortLink(String)} печатает “Copy and open manually” и
+ *       не пытается открыть реальный браузер.
+ *   <li>Для сценариев cleanup отключается авто-очистка и включается hard-delete.
+ *   <li>users.json всегда сидится явно, т.к. проверки владения/валидации на него опираются.
  * </ul>
  */
 public class ShortLinkServiceTest {
@@ -45,16 +45,16 @@ public class ShortLinkServiceTest {
 
   @BeforeEach
   void setUp() throws Exception {
-    // Isolate relative "data" under tempDir
+    // Изолируем относительное "data" под tempDir
     originalUserDir = System.getProperty("user.dir");
     System.setProperty("user.dir", tempDir.toAbsolutePath().toString());
     Files.createDirectories(DataPaths.DATA_DIR);
 
-    // Force headless to avoid Desktop opening attempts
+    // Форсим headless, чтобы не было попыток открыть браузер
     originalHeadless = System.getProperty("java.awt.headless");
     System.setProperty("java.awt.headless", "true");
 
-    // Capture stdout for assertions on user-visible messages
+    // Перехват stdout для ассертов по пользовательским сообщениям
     originalOut = System.out;
     outCapture = new ByteArrayOutputStream();
     System.setOut(new PrintStream(outCapture, true, StandardCharsets.UTF_8));
@@ -71,18 +71,18 @@ public class ShortLinkServiceTest {
     System.setProperty("user.dir", originalUserDir);
   }
 
-  // ---------- helpers ----------
+  // ---------- helpers (объединённые без дубликатов) ----------
 
   private static ConfigJson cfgDefault() {
     ConfigJson c = new ConfigJson();
     c.baseUrl = "cli://";
     c.shortCodeLength = 6;
     c.defaultTtlHours = 24;
-    c.defaultClickLimit = 3; // small to reach limit quickly
+    c.defaultClickLimit = 3; // небольшой лимит, чтобы быстро достигать
     c.maxUrlLength = 2048;
     c.cleanupOnEachOp = true;
     c.allowOwnerEditLimit = true;
-    c.hardDeleteExpired = false; // keep links to observe status transitions
+    c.hardDeleteExpired = false; // оставляем, чтобы наблюдать переходы статусов
     c.eventsLogEnabled = true;
     c.clockSkewToleranceSec = 2;
     return c;
@@ -90,8 +90,38 @@ public class ShortLinkServiceTest {
 
   private static ConfigJson cfgNegativeTtl() {
     ConfigJson c = cfgDefault();
-    c.defaultTtlHours = -1; // ensures newly created links are already expired
+    c.defaultTtlHours = -1; // новые ссылки сразу просрочены
     return c;
+  }
+
+  private static ConfigJson cfgCleanupBase() {
+    ConfigJson c = new ConfigJson();
+    c.baseUrl = "cli://";
+    c.shortCodeLength = 6;
+    c.defaultTtlHours = 24; // положительный TTL по умолчанию
+    c.defaultClickLimit = 3;
+    c.maxUrlLength = 2048;
+    c.cleanupOnEachOp = false; // ВАЖНО: не чистим автоматически до явного вызова
+    c.allowOwnerEditLimit = true;
+    c.hardDeleteExpired = true; // ВАЖНО: cleanup удаляет и возвращает положительные счётчики
+    c.eventsLogEnabled = true;
+    c.clockSkewToleranceSec = 2;
+    return c;
+  }
+
+  private static ConfigJson cfgNegativeTtlFrom(ConfigJson base) {
+    ConfigJson n = new ConfigJson();
+    n.baseUrl = base.baseUrl;
+    n.shortCodeLength = base.shortCodeLength;
+    n.defaultTtlHours = -1; // вновь создаваемые ссылки сразу просрочены
+    n.defaultClickLimit = base.defaultClickLimit;
+    n.maxUrlLength = base.maxUrlLength;
+    n.cleanupOnEachOp = base.cleanupOnEachOp;
+    n.allowOwnerEditLimit = base.allowOwnerEditLimit;
+    n.hardDeleteExpired = base.hardDeleteExpired;
+    n.eventsLogEnabled = base.eventsLogEnabled;
+    n.clockSkewToleranceSec = base.clockSkewToleranceSec;
+    return n;
   }
 
   private static void seedUsers(String... uuids) throws IOException {
@@ -118,7 +148,7 @@ public class ShortLinkServiceTest {
     return outCapture.toString(StandardCharsets.UTF_8);
   }
 
-  // ---------- tests ----------
+  // ---------- tests (обе группы тестов из двух файлов) ----------
 
   @Test
   @DisplayName("Create, list, find, stats, export: must work and print expected messages")
@@ -128,7 +158,7 @@ public class ShortLinkServiceTest {
 
     ShortLinkService svc = new ShortLinkService(OWNER, cfgDefault(), new EventService(true));
 
-    // Create two links (one with default limit, one with explicit)
+    // Две ссылки (одна с дефолтным лимитом, одна с явным)
     ShortLink a = svc.createShortLink("http://example.com/a", null);
     ShortLink b = svc.createShortLink("https://host/b", 5);
 
@@ -139,18 +169,18 @@ public class ShortLinkServiceTest {
     assertTrue(svc.findByShortCode(a.shortCode).isPresent(), "findByShortCode must locate 'a'.");
     assertTrue(svc.findByShortCode(b.shortCode).isPresent(), "findByShortCode must locate 'b'.");
 
-    // Stats (mine)
+    // Статистика (мои)
     ShortLinkService.Stats st = svc.statsMine(10);
     assertEquals(2, st.total, "Stats should see 2 links.");
     assertEquals(0, st.totalClicks, "No opens yet.");
     assertEquals(2, st.topByClicks.size(), "Top N should include both (N=10).");
 
-    // Export
+    // Экспорт
     Path out = svc.exportMyLinks();
     assertNotNull(out, "Export should return a file path.");
     assertTrue(Files.exists(out), "Export file must exist.");
 
-    // Check console messages
+    // Консоль
     String console = stdout();
     assertTrue(console.contains("Exported 2 link(s)"), "Export should print exported count.");
   }
@@ -162,16 +192,16 @@ public class ShortLinkServiceTest {
     final String OWNER = "22222222-2222-2222-2222-222222222222";
     seedUsers(OWNER);
 
-    // Limit scenario (default limit = 3)
+    // Лимит (дефолт = 3)
     ShortLinkService svc = new ShortLinkService(OWNER, cfgDefault(), new EventService(true));
     ShortLink l = svc.createShortLink("http://example.com/limit", null);
 
-    // Open twice -> still allowed (clickCount becomes 2)
+    // Два открытия -> ещё можно (clickCount = 2)
     svc.openShortLink(l.shortCode);
-    svc.openShortLink("cli://" + l.shortCode); // with baseUrl prefix
-    // Third open -> limit reached (3/3) and blocked on next try
+    svc.openShortLink("cli://" + l.shortCode); // с префиксом baseUrl
+    // Третье -> достижение лимита (3/3), четвёртая попытка печатает “Click limit reached...”
     svc.openShortLink(l.shortCode);
-    svc.openShortLink(l.shortCode); // this attempt should print "Click limit reached..."
+    svc.openShortLink(l.shortCode);
 
     String console1 = stdout();
     assertTrue(
@@ -182,21 +212,20 @@ public class ShortLinkServiceTest {
         console1.contains("Click limit reached"),
         "After reaching limit, service must report the limit reached.");
 
-    // Expired scenario: create expired link in the SAME service via temporary TTL switch
+    // Просроченная: создаём просроченную в ЭТОМ ЖЕ сервисе через временный отрицательный TTL
     outCapture.reset();
     ConfigJson saved = cfgDefault();
     ConfigJson neg = cfgNegativeTtl();
-    // Switch to negative TTL, create (expired), then switch back
     svc.reloadConfig(neg);
     ShortLink e = svc.createShortLink("http://example.com/expired", null);
     svc.reloadConfig(saved);
 
-    svc.openShortLink(e.shortCode); // should be expired immediately
+    svc.openShortLink(e.shortCode); // сразу должно быть просрочено
 
     String console2 = stdout();
     assertTrue(console2.contains("expired at"), "Expired message must be printed.");
 
-    // Verify statuses via repository-backed service calls
+    // Проверяем статусы
     assertEquals(Status.LIMIT_REACHED, svc.findByShortCode(l.shortCode).get().status);
     assertEquals(Status.EXPIRED, svc.findByShortCode(e.shortCode).get().status);
   }
@@ -210,36 +239,36 @@ public class ShortLinkServiceTest {
     ShortLinkService svc = new ShortLinkService(OWNER, cfgDefault(), new EventService(true));
     ShortLink l = svc.createShortLink("http://example.com/edit", 5);
 
-    // Invalid: negative
+    // Неверно: отрицательное
     outCapture.reset();
     boolean okNeg = svc.editClickLimit(l.shortCode, -1);
     assertFalse(okNeg, "Negative limit must be rejected.");
     assertTrue(stdout().contains("New limit must be positive."));
 
-    // Increase clickCount to 2
+    // Поднимем clickCount до 2
     svc.openShortLink(l.shortCode);
     svc.openShortLink(l.shortCode);
 
-    // Now set lower than current clicks but > 0 to hit the '< current clicks' branch
+    // Теперь поставим ниже текущих кликов (>0) — ветка '< current clicks'
     outCapture.reset();
     boolean okTooLow = svc.editClickLimit(l.shortCode, 1);
     assertFalse(okTooLow, "Limit lower than current clicks must be rejected.");
     assertTrue(
         stdout().contains("New limit must be >= current clicks"), "Proper message expected.");
 
-    // Set unlimited (null)
+    // Безлимит
     outCapture.reset();
     boolean okUnlimited = svc.editClickLimit("cli://" + l.shortCode, null);
     assertTrue(okUnlimited, "Setting unlimited should be accepted.");
     assertTrue(stdout().contains("set to unlimited"));
 
-    // Set specific numeric limit again
+    // Снова числовой лимит
     outCapture.reset();
     boolean okNum = svc.editClickLimit(l.shortCode, 10);
     assertTrue(okNum, "Setting numeric limit should be accepted.");
     assertTrue(stdout().contains("set to 10"));
 
-    // Delete by owner
+    // Удаление владельцем
     outCapture.reset();
     boolean del = svc.deleteLink(l.shortCode);
     assertTrue(del, "Owner should be able to delete the link.");
@@ -252,15 +281,14 @@ public class ShortLinkServiceTest {
   void validateJson_reportsIssues() throws Exception {
     final String OWNER_OK = "55555555-5555-5555-5555-555555555555";
     final String OWNER_UNKNOWN = "66666666-6666-6666-6666-666666666666";
-    seedUsers(OWNER_OK); // do NOT seed OWNER_UNKNOWN to trigger 'orphan link'
+    seedUsers(OWNER_OK); // OWNER_UNKNOWN не сидим — получим "orphan link"
 
     ShortLinkService svc = new ShortLinkService(OWNER_OK, cfgDefault(), new EventService(true));
-    // Ensure there is at least one valid link as baseline
+    // Минимум одна валидная запись для baseline
     svc.createShortLink("http://valid.example.com", null);
 
-    // Now inject malformed entries directly into links.json
+    // Подложим в links.json некорректную запись
     List<ShortLink> all = new ArrayList<>();
-    // 1) valid one(s) — re-read from repository file to keep consistency
     try (BufferedReader br =
         Files.newBufferedReader(DataPaths.LINKS_JSON, StandardCharsets.UTF_8)) {
       ShortLink[] existing = GSON.fromJson(br, ShortLink[].class);
@@ -269,16 +297,15 @@ public class ShortLinkServiceTest {
       }
     }
 
-    // 2) Bad entry
     ShortLink bad = new ShortLink();
     bad.id = "L-999999";
-    bad.ownerUuid = OWNER_UNKNOWN; // unknown owner
-    bad.longUrl = "notaurl"; // invalid URL
-    bad.shortCode = ""; // missing shortCode
-    bad.createdAt = null; // missing dates
+    bad.ownerUuid = OWNER_UNKNOWN; // неизвестный владелец
+    bad.longUrl = "notaurl"; // невалидный URL
+    bad.shortCode = ""; // отсутствует shortCode
+    bad.createdAt = null; // отсутствуют даты
     bad.expiresAt = null;
-    bad.clickLimit = 0; // invalid (<=0)
-    bad.clickCount = -1; // invalid (<0)
+    bad.clickLimit = 0; // невалидно (<= 0)
+    bad.clickCount = -1; // невалидно (< 0)
     bad.lastAccessAt = null;
     bad.status = Status.ACTIVE;
     all.add(bad);
@@ -297,5 +324,70 @@ public class ShortLinkServiceTest {
     assertTrue(rep.totalLinks >= 2, "There should be at least two entries in validation.");
     assertTrue(rep.issues > 0, "Malformed entry must produce issues.");
     assertFalse(rep.messages.isEmpty(), "Validation should list at least one message.");
+  }
+
+  @Test
+  @DisplayName(
+      "cleanupExpired / cleanupLimitReached: states change and counts are >= 1 (no auto-clean)")
+  void cleanup_paths_stable() throws Exception {
+    final String OWNER = "77777777-7777-7777-7777-777777777777";
+    seedUsers(OWNER);
+
+    // Base config: NO auto-clean; HARD delete in cleanup
+    ConfigJson base = cfgCleanupBase();
+    ShortLinkService svc = new ShortLinkService(OWNER, base, new EventService(true));
+
+    // 1) EXPIRED candidate: temporarily switch to negative TTL in THE SAME service
+    ConfigJson neg = cfgNegativeTtlFrom(base);
+    svc.reloadConfig(neg);
+    ShortLink expired = svc.createShortLink("http://example.com/expired-by-ttl", null);
+    // Keep it as is; status is ACTIVE but expiresAt is in the past.
+    // Switch back to base config (no auto-clean)
+    svc.reloadConfig(base);
+
+    // 2) LIMIT_REACHED candidate: limit = 1, a single open -> counters hit the limit
+    ShortLink limited = svc.createShortLink("http://example.com/reached", 1);
+    svc.openShortLink(limited.shortCode); // clickCount == 1 (== limit)
+
+    // Sanity: both entries must exist before cleanup
+    assertTrue(
+        svc.findByShortCode(expired.shortCode).isPresent(),
+        "[DEBUG] expired candidate is present before cleanup");
+    assertTrue(
+        svc.findByShortCode(limited.shortCode).isPresent(),
+        "[DEBUG] limit candidate is present before cleanup");
+
+    // Run both cleanups; with hardDelete=true they must return positive counts.
+    outCapture.reset();
+    int nExp = svc.cleanupExpired();
+    int nLim = svc.cleanupLimitReached();
+    String log = stdout();
+    System.out.println("[DEBUG] cleanupExpired returned: " + nExp);
+    System.out.println("[DEBUG] cleanupLimitReached returned: " + nLim);
+    System.out.println("[DEBUG] console:\n" + log);
+
+    // Accept both old and new summary messages (backward compatible)
+    boolean expiredSummaryPrinted =
+        log.contains("Expired links deleted: ")
+            || log.contains("Expired links marked as EXPIRED: ")
+            || log.contains("Expired cleaned: ");
+    assertTrue(expiredSummaryPrinted, "[DEBUG] must print expired summary");
+
+    boolean limitSummaryPrinted =
+        log.contains("Limit-reached links deleted: ")
+            || log.contains("Limit-reached links marked as LIMIT_REACHED: ")
+            || log.contains("Limit-reached cleaned: ");
+    assertTrue(limitSummaryPrinted, "[DEBUG] must print limit-reached summary");
+
+    assertTrue(nExp >= 1, "[DEBUG] At least one expired entry should be processed.");
+    assertTrue(nLim >= 1, "[DEBUG] At least one limit-reached entry should be processed.");
+
+    // With HARD delete enabled, both records must be removed after cleanup
+    assertTrue(
+        svc.findByShortCode(expired.shortCode).isEmpty(),
+        "[DEBUG] expired candidate should be deleted");
+    assertTrue(
+        svc.findByShortCode(limited.shortCode).isEmpty(),
+        "[DEBUG] limit candidate should be deleted");
   }
 }

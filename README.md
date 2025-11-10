@@ -78,7 +78,9 @@ It supports link creation with TTL and click limits, opening (with auto-redirect
     cli/
       ConsoleMenu.java              # All menus and actions (links, open, maintenance, users, help)
       InputUtils.java               # Safe console input (trimmed, null on EOF)
-
+      ConsoleMenuTest.java
+      InputUtilsTest.java      
+    
     model/
       ShortLink.java                # Link entity: id/owner/urls/timestamps/limits/status
       Status.java                   # ACTIVE | EXPIRED | LIMIT_REACHED | DELETED
@@ -91,6 +93,8 @@ It supports link creation with TTL and click limits, opening (with auto-redirect
                                     # auto-cleanups, validation; emits events via EventService
       EventService.java             # Emits/list events (per owner and global)
       UserService.java              # Manages current user, list, create/switch/upsert
+      EventServiceTest.java
+      ShortLinkServiceTest.java        
 
     storage/
       ConfigJson.java               # Load or create default config (data/config.json)
@@ -101,7 +105,13 @@ It supports link creation with TTL and click limits, opening (with auto-redirect
       EventsRepository.java         # In-memory cache + JSON persistence for events
       LocalUuid.java                # Persistent current user UUID in .local/user.uuid
       StorageJson.java              # Generic atomic writer for lists (kept for compatibility)
-
+      ConfigJsonTest.java
+      EventRepositoryTest.java
+      LinksRepositoryTest.java
+      LinksREpositoryCleanupTest.java      
+      UsersRepositoryTest.java
+      StorageJsonTest.java    
+      
     util/
       JsonUtils.java                # Gson with LocalDateTime adapters (ISO)
       TimeUtils.java                # Expiration check helpers
