@@ -668,7 +668,7 @@ public class ConsoleMenu {
       return;
     }
 
-    // покажем первые 30 сообщений, чтобы не заваливать консоль
+    // showing first 30 messages not to overload the console
     int show = Math.min(30, rep.messages.size());
     for (int i = 0; i < show; i++) {
       System.out.println("- " + rep.messages.get(i));

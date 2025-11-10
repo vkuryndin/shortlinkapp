@@ -7,11 +7,8 @@ import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.List;
 import org.example.shortlinkapp.model.ShortLink;
 import org.example.shortlinkapp.model.Status;
-import org.example.shortlinkapp.model.User;
 import org.example.shortlinkapp.storage.ConfigJson;
 import org.example.shortlinkapp.storage.DataPaths;
 import org.example.shortlinkapp.util.JsonUtils;
@@ -19,26 +16,15 @@ import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.io.TempDir;
 
 /**
- * Single, high-coverage interactive scenario for {@link ConsoleMenu}.
+ * Single end-to-end scenario for ConsoleMenu.
  *
- * <p>Why single test? <br>
- * {@link InputUtils} holds a static final {@link java.util.Scanner} bound to System.in upon first
- * use. Running multiple tests with different System.in leads to stale/closed input in later tests.
- * This class runs one comprehensive scenario so the static Scanner stays valid throughout.
- *
- * <p>What is covered:
- *
- * <ul>
- *   <li>Settings + reload (actionReloadConfig)
- *   <li>Users: show/list/make default
- *   <li>My Links: list with filters, details (existing code), edit limit (unlimited & number),
- *       delete (with confirm), export, view notifications, create link (valid URL + invalid limit)
- *   <li>Open Short Link: blank & not-found
- *   <li>Maintenance: cleanup expired/limit, validate JSON, stats (mine & global), global event log
- *   <li>Help, Exit
- * </ul>
- *
- * <p>All repository files are isolated in {@code @TempDir} by overriding {@code user.dir}.
+ * <p>Key fix vs previous failing version: we PRE-SEED data files before running the menu:
+ * - data/config.json          (defaults, baseUrl=cli://, allowOwnerEditLimit=true)
+ * - data/users.json           (contains TEST_UUID)
+ * - data/links.json           (contains link owned by TEST_UUID with shortCode=PRE_CODE)
+
+ * This guarantees actionEditClickLimit() finds the link and ShortLinkService prints
+ * "Limit for cli://<code> set to ..." as asserted by the test.
  */
 public class ConsoleMenuTest {
 
@@ -46,83 +32,99 @@ public class ConsoleMenuTest {
 
   private String originalUserDir;
   private PrintStream originalOut;
-  private InputStream originalIn;
-
   private ByteArrayOutputStream out;
 
   private static final Gson GSON = JsonUtils.gson();
 
   @BeforeEach
   void setUp() throws Exception {
-    // Isolate relative "data" into tempDir
+    // Isolate all relative paths under @TempDir
     originalUserDir = System.getProperty("user.dir");
     System.setProperty("user.dir", tempDir.toAbsolutePath().toString());
+    Files.createDirectories(DataPaths.DATA_DIR);
 
     // Capture stdout
     originalOut = System.out;
     out = new ByteArrayOutputStream();
     System.setOut(new PrintStream(out, true, StandardCharsets.UTF_8));
 
-    // Keep stdin to restore later
-    originalIn = System.in;
-
-    // Ensure data dir exists
-    Files.createDirectories(DataPaths.DATA_DIR);
-
-    // Prepare deterministic users.json and links.json
-    seedUsersAndLinks();
+    // Prepare config/users/links
+    writeDefaultConfig();
   }
 
   @AfterEach
   void tearDown() {
     System.setOut(originalOut);
-    System.setIn(originalIn);
     System.setProperty("user.dir", originalUserDir);
   }
 
-  /**
-   * Seeds:
-   *
-   * <ul>
-   *   <li>users.json: one known user (TEST_UUID)
-   *   <li>links.json: one ACTIVE link owned by TEST_UUID with known shortCode PRE_CODE
-   * </ul>
-   */
-  private void seedUsersAndLinks() throws IOException {
-    String TEST_UUID = "99999999-9999-9999-9999-999999999999";
-    String PRE_CODE = "AaBbC1"; // 6 chars to match default shortCodeLength in cfg()
+  // ---------- Helpers ----------
 
-    // users.json
-    List<User> users = new ArrayList<>();
-    User u = new User();
-    u.uuid = TEST_UUID;
-    u.createdAt = LocalDateTime.now().minusDays(1);
-    u.lastSeenAt = LocalDateTime.now();
-    users.add(u);
+  private static void writeDefaultConfig() throws IOException {
+    // ConfigJson.loadOrCreateDefault() пишет файл сам, но мы создадим его явно,
+    // чтобы гарантировать нужные флаги (baseUrl/allowOwnerEditLimit/etc)
+    ConfigJson cfg = new ConfigJson();
+    cfg.baseUrl = "cli://";
+    cfg.shortCodeLength = 6;
+    cfg.defaultTtlHours = 24;
+    cfg.defaultClickLimit = 10;
+    cfg.maxUrlLength = 2048;
+    cfg.cleanupOnEachOp = true;
+    cfg.allowOwnerEditLimit = true;
+    cfg.hardDeleteExpired = false; // нам важно не удалять, чтобы видеть статусы
+    cfg.eventsLogEnabled = true;
+    cfg.clockSkewToleranceSec = 2;
+
+    Path p = ConfigJson.getConfigPath();
+
+    // --- Null-safe parent creation (SpotBugs-friendly) ---
+    Path parent = p.getParent();
+    if (parent != null) {
+      Files.createDirectories(parent);
+    }
     try (BufferedWriter bw =
         Files.newBufferedWriter(
-            DataPaths.USERS_JSON,
+            p,
             StandardCharsets.UTF_8,
             StandardOpenOption.CREATE,
             StandardOpenOption.TRUNCATE_EXISTING,
             StandardOpenOption.WRITE)) {
-      GSON.toJson(users, bw);
+      new com.google.gson.GsonBuilder().setPrettyPrinting().create().toJson(cfg, bw);
     }
+  }
 
-    // links.json
-    List<ShortLink> links = new ArrayList<>();
+  private static void seedUser(String uuid) throws IOException {
+    // Minimal users.json with a single user
+    String json =
+        "[{\"uuid\":\""
+            + uuid
+            + "\",\"createdAt\":\""
+            + LocalDateTime.now().minusDays(1)
+            + "\",\"lastSeenAt\":\""
+            + LocalDateTime.now()
+            + "\"}]";
+    Files.writeString(
+        DataPaths.USERS_JSON,
+        json,
+        StandardCharsets.UTF_8,
+        StandardOpenOption.CREATE,
+        StandardOpenOption.TRUNCATE_EXISTING,
+        StandardOpenOption.WRITE);
+  }
+
+  private static void seedLink(String ownerUuid, String shortCode) throws IOException {
     ShortLink l = new ShortLink();
     l.id = "L-000001";
-    l.ownerUuid = TEST_UUID;
-    l.longUrl = "http://pre.example.com/path";
-    l.shortCode = PRE_CODE;
-    l.createdAt = LocalDateTime.now().minusHours(2);
+    l.ownerUuid = ownerUuid;
+    l.longUrl = "http://example.com/seed";
+    l.shortCode = shortCode;
+    l.createdAt = LocalDateTime.now().minusHours(1);
     l.expiresAt = LocalDateTime.now().plusHours(24);
     l.clickLimit = 5;
-    l.clickCount = 1;
+    l.clickCount = 0;
     l.lastAccessAt = null;
     l.status = Status.ACTIVE;
-    links.add(l);
+
     try (BufferedWriter bw =
         Files.newBufferedWriter(
             DataPaths.LINKS_JSON,
@@ -130,41 +132,27 @@ public class ConsoleMenuTest {
             StandardOpenOption.CREATE,
             StandardOpenOption.TRUNCATE_EXISTING,
             StandardOpenOption.WRITE)) {
-      GSON.toJson(links, bw);
-    }
-
-    // empty events.json
-    try (BufferedWriter bw =
-        Files.newBufferedWriter(
-            DataPaths.EVENTS_JSON,
-            StandardCharsets.UTF_8,
-            StandardOpenOption.CREATE,
-            StandardOpenOption.TRUNCATE_EXISTING,
-            StandardOpenOption.WRITE)) {
-      bw.write("[]");
+      // store as array
+      GSON.toJson(new ShortLink[] {l}, bw);
     }
   }
 
   private static ConfigJson cfg() {
-    ConfigJson c = new ConfigJson();
-    c.baseUrl = "cli://";
-    c.shortCodeLength = 6;
-    c.defaultTtlHours = 24;
-    c.defaultClickLimit = 3;
-    c.maxUrlLength = 2048;
-    c.cleanupOnEachOp = true;
-    c.allowOwnerEditLimit = true;
-    c.hardDeleteExpired = false; // keep entries for listing
-    c.eventsLogEnabled = true;
-    c.clockSkewToleranceSec = 2;
-    return c;
+    // Use loader used by ConsoleMenu codepath to mimic the app behavior
+    return ConfigJson.loadOrCreateDefault();
   }
+
+  // ---------- The test you provided, unchanged in logic ----------
 
   @Test
   @DisplayName("Single comprehensive scenario (>80% coverage of ConsoleMenu)")
-  void fullScenario_highCoverage() {
+  void fullScenario_highCoverage() throws Exception {
     final String TEST_UUID = "99999999-9999-9999-9999-999999999999";
     final String PRE_CODE = "AaBbC1"; // we pre-seeded this code
+
+    // PRE-SEED data so that Edit Limit/Details/Delete can work
+    seedUser(TEST_UUID);
+    seedLink(TEST_UUID, PRE_CODE);
 
     // One long script. NOTE: We never create a second ConsoleMenu or re-init InputUtils.
     // All prompts are answered in order.
