@@ -61,8 +61,8 @@ public class ConsoleMenuTest {
   // ---------- Helpers ----------
 
   private static void writeDefaultConfig() throws IOException {
-    // ConfigJson.loadOrCreateDefault() пишет файл сам, но мы создадим его явно,
-    // чтобы гарантировать нужные флаги (baseUrl/allowOwnerEditLimit/etc)
+    // ConfigJson.loadOrCreateDefault() writes the file itself, but we will create it explicitly
+    // to guarantee required flags (baseUrl/allowOwnerEditLimit/etc)
     ConfigJson cfg = new ConfigJson();
     cfg.baseUrl = "cli://";
     cfg.shortCodeLength = 6;
@@ -71,7 +71,7 @@ public class ConsoleMenuTest {
     cfg.maxUrlLength = 2048;
     cfg.cleanupOnEachOp = true;
     cfg.allowOwnerEditLimit = true;
-    cfg.hardDeleteExpired = false; // нам важно не удалять, чтобы видеть статусы
+    cfg.hardDeleteExpired = false; // it is important not to delete so we can observe statuses
     cfg.eventsLogEnabled = true;
     cfg.clockSkewToleranceSec = 2;
 

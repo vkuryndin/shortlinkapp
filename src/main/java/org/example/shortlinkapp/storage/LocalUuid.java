@@ -21,7 +21,7 @@ import java.util.UUID;
  *       location, replacing any existing value.
  * </ul>
  *
- * <h3>Thread-safety</h3>
+ * <h2>Thread-safety</h2>
  *
  * Methods are not synchronized; typical usage is from a single CLI process. The underlying writes
  * replace the entire file content.

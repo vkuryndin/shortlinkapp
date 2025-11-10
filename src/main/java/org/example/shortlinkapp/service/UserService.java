@@ -17,7 +17,7 @@ import org.example.shortlinkapp.storage.UsersRepository;
  *   <li>{@code lastSeenAt} is refreshed to the current moment.
  * </ul>
  *
- * <h3>Design notes</h3>
+ * <h2>Design notes</h2>
  *
  * <ul>
  *   <li>The class is intentionally lightweight; it delegates all persistence concerns to {@link
@@ -96,7 +96,11 @@ public class UserService {
     return id;
   }
 
-  /** Returns the UUID of the user considered "current" for the session. */
+  /**
+   * Returns the UUID of the user considered "current" for the session.
+   *
+   * @return the current UUID
+   */
   public String getCurrentUuid() {
     return currentUuid; // <- fixing spotbugs error
   }

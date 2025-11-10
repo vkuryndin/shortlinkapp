@@ -65,7 +65,8 @@ public final class StorageJson {
    * @param <T> element type
    * @throws IOException if the parent directory cannot be created, the temp file cannot be written,
    *     or the atomic move fails
-   * @implNote Uses {@link Gson} with pretty printing and {@link StandardCharsets#UTF_8}.
+   *     <p><strong>Implementation note:</strong> Uses {@link Gson} with pretty printing and {@link
+   *     StandardCharsets#UTF_8}.
    */
   public static <T> void writeAtomic(Path target, List<T> list, Class<T> type) throws IOException {
     Objects.requireNonNull(target, "target");

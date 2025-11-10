@@ -388,8 +388,8 @@ public class ShortLinkService {
    *
    * @return number of affected records (deleted in hard mode; newly marked in soft mode — already
    *     marked entries do not count)
-   * @implNote This method delegates the actual processing to {@link #cleanupExpiredAndLog(boolean)}
-   *     with {@code onlyMine = false}.
+   *     <p><strong>Implementation note:</strong> This method delegates the actual processing to
+   *     {@link #cleanupExpiredAndLog(boolean)}.
    */
   public int cleanupExpired() {
     int n = cleanupExpiredAndLog(false);
@@ -434,8 +434,8 @@ public class ShortLinkService {
    *
    * @return number of affected records (deleted in hard mode; newly marked in soft mode — entries
    *     already marked remain counted as 0)
-   * @implNote This method delegates the actual processing to {@link
-   *     #cleanupLimitReachedAndLog(boolean)} with {@code onlyMine = false}.
+   *     <p><strong>Implementation note:</strong> This method delegates the actual processing to
+   *     {@link #cleanupExpiredAndLog(boolean)}.
    */
   public int cleanupLimitReached() {
     int n = cleanupLimitReachedAndLog(false);
