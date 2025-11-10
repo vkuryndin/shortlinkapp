@@ -37,7 +37,7 @@ jobs:
         run: |
           ref="${GITHUB_HEAD_REF:-${GITHUB_REF_NAME}}"
           ref="${ref//\//-}"   # change all / to -
-          echo "safe_name=myfinanceapp-${ref}-${GITHUB_RUN_NUMBER}" >> "$GITHUB_OUTPUT"
+          echo "safe_name=shortlinkapp-${ref}-${GITHUB_RUN_NUMBER}" >> "$GITHUB_OUTPUT"
 
       # JAR — only if build is green
       - name: Upload build artifacts (JAR)
