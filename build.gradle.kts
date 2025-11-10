@@ -2,6 +2,9 @@ import org.gradle.testing.jacoco.plugins.JacocoTaskExtension
 import com.github.spotbugs.snom.SpotBugsTask
 import java.math.BigDecimal
 import org.gradle.testing.jacoco.tasks.JacocoCoverageVerification
+import org.gradle.external.javadoc.StandardJavadocDocletOptions
+import org.gradle.api.tasks.javadoc.Javadoc
+
 
 plugins {
     java
@@ -187,4 +190,22 @@ tasks.named("check") {
         tasks.jacocoTestReport, //compile Jococo report
         jacocoCoverage          // fail, if coverage is less than < 50% by lines
     )
+}
+
+
+
+tasks.register<Javadoc>("testJavadoc") {
+    // Sources for test Javadoc
+    source = sourceSets.test.get().allJava
+    // Classpath for test sources
+    classpath = sourceSets.test.get().compileClasspath
+    // Output directory (no deprecated buildDir)
+    destinationDir = layout.buildDirectory.dir("docs/testJavadoc").get().asFile
+    // Relax doclint for tests
+    (options as StandardJavadocDocletOptions).addBooleanOption("Xdoclint:none", true)
+}
+
+tasks.named<Javadoc>("javadoc") {
+    // Optional: relax doclint for main too
+    (options as StandardJavadocDocletOptions).addBooleanOption("Xdoclint:none", true)
 }

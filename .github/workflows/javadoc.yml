@@ -31,13 +31,24 @@ jobs:
       - name: Make Gradle wrapper executable
         run: chmod +x gradlew
 
-      - name: Generate Javadoc
+      - name: Generate Javadoc (main)
         run: ./gradlew javadoc --no-daemon
 
-      - name: Upload Javadoc artifact
+      - name: Generate Javadoc (tests with Xdoclint:none)
+        run: ./gradlew testJavadoc --no-daemon
+
+      - name: Upload Javadoc artifact (main)
         uses: actions/upload-artifact@v4
         with:
           name: javadoc
           path: build/docs/javadoc
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload Javadoc artifact (tests)
+        uses: actions/upload-artifact@v4
+        with:
+          name: javadoc-tests
+          path: build/docs/testJavadoc
           if-no-files-found: error
           retention-days: 14
