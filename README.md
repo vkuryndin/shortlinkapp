@@ -1,4 +1,4 @@
-# ShortlinkApp CLI (Java)
+# ShortLinkApp CLI (Java)
 ## Badges
 
 ![Build Status](https://github.com/vkuryndin/MyFinanceApp/actions/workflows/ci.yml/badge.svg)
@@ -144,7 +144,7 @@ It supports link creation with TTL and click limits, opening (with auto-redirect
 | eventsLogEnabled       | boolean        | Enable notification logging |
 | clockSkewToleranceSec  | number         | Reserved |
 
-Reload config at runtime via **Settings → reload**.
+Reload config at runtime via **Settings → Reload Config**.
 
 ---
 
@@ -198,11 +198,13 @@ Reports can be found in:
     - build/reports/jacoco/
     - build/reports/tests/test/
 
+### Run spotbugs 
+    ./gradlew spotbugstest spotbugsMain 
 ---
 
 ## GitHub CI/CD Pipeline
 
-GitHub Actions is fully configured to run on every push and pull request.
+GitHub Actions are fully configured to run on every push and pull request.
 
 ### The pipeline performs:
 - Java 17 setup
