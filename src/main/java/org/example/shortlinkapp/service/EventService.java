@@ -68,4 +68,8 @@ public class EventService {
         .limit(Math.max(1, limit))
         .collect(java.util.stream.Collectors.toList());
   }
+
+  public boolean isEnabled() {
+    return enabled;
+  }
 }

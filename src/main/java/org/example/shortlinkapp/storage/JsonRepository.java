@@ -7,6 +7,7 @@ import java.io.IOException;
 import java.lang.reflect.Type;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
+import java.util.Objects;
 import org.example.shortlinkapp.util.JsonUtils;
 
 final class JsonRepository {
@@ -23,7 +24,7 @@ final class JsonRepository {
           return (data != null) ? data : defaultValue;
         }
       } else {
-        // create empty file
+        // create an empty file
         try (BufferedWriter bw =
             Files.newBufferedWriter(
                 path,
@@ -41,9 +42,25 @@ final class JsonRepository {
     }
   }
 
-  static <T> void writeAtomic(Path target, T payload) throws IOException {
-    ensureParent(target);
-    Path tmp = target.resolveSibling(target.getFileName().toString() + ".tmp");
+  // Keep the same signature.
+  public static void writeAtomic(Path target, Object value) throws IOException {
+    Objects.requireNonNull(target, "target");
+    Objects.requireNonNull(value, "value");
+
+    // Ensure we have a parent directory; Path.getParent() can be null (root).
+    Path parent = target.getParent();
+    if (parent == null) {
+      throw new IOException("Target path has no parent directory: " + target);
+    }
+    Files.createDirectories(parent);
+
+    // Path.getFileName() may be null for root paths; use a safe fallback.
+    Path fn = target.getFileName();
+    String baseName = (fn != null) ? fn.toString() : "data";
+
+    Path tmp = parent.resolve("." + baseName + ".tmp");
+
+    // Write JSON into a temp file, then atomically move it into place.
     try (BufferedWriter bw =
         Files.newBufferedWriter(
             tmp,
@@ -51,13 +68,10 @@ final class JsonRepository {
             StandardOpenOption.CREATE,
             StandardOpenOption.TRUNCATE_EXISTING,
             StandardOpenOption.WRITE)) {
-      GSON.toJson(payload, bw);
+      GSON.toJson(value, bw);
     }
-    try {
-      Files.move(tmp, target, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
-    } catch (AtomicMoveNotSupportedException e) {
-      Files.move(tmp, target, StandardCopyOption.REPLACE_EXISTING);
-    }
+
+    Files.move(tmp, target, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
   }
 
   private static void ensureParent(Path p) throws IOException {

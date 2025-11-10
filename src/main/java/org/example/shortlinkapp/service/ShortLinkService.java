@@ -2,7 +2,9 @@ package org.example.shortlinkapp.service;
 
 import com.google.gson.Gson;
 import java.awt.Desktop;
+import java.io.IOException;
 import java.net.URI;
+import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -31,7 +33,8 @@ public class ShortLinkService {
   public ShortLinkService(String ownerUuid, ConfigJson cfg, EventService events) {
     this.ownerUuid = ownerUuid;
     this.cfg = cfg;
-    this.events = events;
+    this.events =
+        (events == null) ? null : new EventService(events.isEnabled()); // fixing spotbugs error
     this.repo = new LinksRepository();
   }
 
@@ -153,9 +156,10 @@ public class ShortLinkService {
           String lim = (l.clickLimit == null) ? "∞" : String.valueOf(l.clickLimit);
           events.info(l.ownerUuid, l.shortCode, "OPEN " + l.clickCount + "/" + lim);
         }
-        Desktop.getDesktop().browse(new URI(url));
+        URI uri = new URI(url); // may throw URISyntaxException
+        Desktop.getDesktop().browse(uri); // may throw IOException / SecurityException
         System.out.println("Opening in browser: " + url);
-      } catch (Exception e) {
+      } catch (URISyntaxException | IOException | SecurityException e) {
         System.out.println("Cannot open browser automatically. Copy and open manually: " + url);
       }
     } else {

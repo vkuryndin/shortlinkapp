@@ -14,29 +14,38 @@ public class LinksRepository {
   private static final Type LIST_TYPE = new TypeToken<List<ShortLink>>() {}.getType();
 
   private List<ShortLink> cache;
-  private long seq = 0; // local sequence for IDs
+  private final java.util.concurrent.atomic.AtomicLong seq =
+      new java.util.concurrent.atomic.AtomicLong(0L);
+
+  // private long seq = 0; // local sequence for IDs
 
   public LinksRepository() {
     this.cache = JsonRepository.readOrDefault(LINKS_JSON, LIST_TYPE, new ArrayList<>());
     // restore sequence based on existing IDs like L-000123
-    cache.stream()
-        .map(l -> l.id)
-        .filter(Objects::nonNull)
-        .forEach(
-            id -> {
-              try {
-                if (id.startsWith("L-")) {
-                  long n = Long.parseLong(id.substring(2));
-                  seq = Math.max(seq, n);
-                }
-              } catch (NumberFormatException ignored) {
-              }
-            });
+    long max = 0L;
+    for (var l : cache) {
+      String id = l.id;
+      if (id == null) continue;
+      try {
+        if (id.startsWith("L-")) {
+          long n = Long.parseLong(id.substring(2));
+          if (n > max) max = n;
+        }
+      } catch (NumberFormatException ignored) {
+      }
+    }
+    seq.set(max); // следующий будет max+1 в nextId()
   }
 
-  public synchronized String nextId() {
-    seq += 1;
-    return String.format("L-%06d", seq);
+  // fixing spot bugs error
+  // public synchronized String nextId() {
+  //     seq += 1;
+  //     return String.format("L-%06d", seq);
+  // }
+
+  public String nextId() {
+    long n = seq.incrementAndGet(); // атомарно: max -> max+1
+    return String.format("L-%06d", n);
   }
 
   public synchronized void add(ShortLink link) {

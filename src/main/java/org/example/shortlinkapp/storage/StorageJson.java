@@ -7,6 +7,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
 import java.util.List;
+import java.util.Objects;
 
 /** */
 public final class StorageJson {
@@ -14,12 +15,28 @@ public final class StorageJson {
 
   private StorageJson() {}
 
-  public static <T> void writeAtomic(Path target, List<T> items, Class<T> clazz)
-      throws IOException {
-    Path parent = target.getParent();
-    if (parent != null) Files.createDirectories(parent);
+  // Keep the same signature; only make it null-safe for parent/fileName
 
-    Path tmp = target.resolveSibling(target.getFileName().toString() + ".tmp");
+  // Keep the same signature; no overloads added.
+  public static <T> void writeAtomic(Path target, List<T> list, Class<T> type) throws IOException {
+    Objects.requireNonNull(target, "target");
+    Objects.requireNonNull(list, "list");
+    Objects.requireNonNull(type, "type");
+
+    // Ensure parent directory exists.
+    Path parent = target.getParent();
+    if (parent == null) {
+      throw new IOException("Target path has no parent directory: " + target);
+    }
+    Files.createDirectories(parent);
+
+    // Safe base name even if getFileName() returns null.
+    Path fn = target.getFileName();
+    String baseName = (fn != null) ? fn.toString() : "data";
+
+    Path tmp = parent.resolve("." + baseName + ".tmp");
+
+    // Serialize list and replace atomically.
     try (BufferedWriter bw =
         Files.newBufferedWriter(
             tmp,
@@ -27,13 +44,9 @@ public final class StorageJson {
             StandardOpenOption.CREATE,
             StandardOpenOption.TRUNCATE_EXISTING,
             StandardOpenOption.WRITE)) {
-      GSON.toJson(items, bw);
+      GSON.toJson(list, bw); // Class<T> kept in signature; not required for serialization here.
     }
-    // Atomic move where supported; fallback to replace
-    try {
-      Files.move(tmp, target, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
-    } catch (AtomicMoveNotSupportedException e) {
-      Files.move(tmp, target, StandardCopyOption.REPLACE_EXISTING);
-    }
+
+    Files.move(tmp, target, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
   }
 }

@@ -58,8 +58,8 @@ public class ConsoleMenu {
     System.out.println("3. Maintenance");
     System.out.println("4. Help / Examples");
     System.out.println("5. Settings (from config.json)");
-    System.out.println("6. Exit");
-    System.out.println("7. Users"); // <-- новый пункт
+    System.out.println("6. Users");
+    System.out.println("7. Exit"); // <-- новый пункт
   }
 
   // =========================
@@ -414,20 +414,15 @@ public class ConsoleMenu {
   }
 
   private void actionReloadConfig() {
-    // reading config.json from disk if not — will create by default
+    // Reload configuration from disk; the method always returns a non-null instance
     org.example.shortlinkapp.storage.ConfigJson fresh =
         org.example.shortlinkapp.storage.ConfigJson.loadOrCreateDefault();
 
-    if (fresh == null) {
-      System.out.println("Reload failed (null config).");
-      return;
-    }
+    this.config = fresh;
+    this.events.setEnabled(fresh.eventsLogEnabled);
+    this.shortLinkService.reloadConfig(fresh);
 
-    this.config = fresh; // update confin in the menu/status
-    this.events.setEnabled(fresh.eventsLogEnabled); // turn on/off event logging
-    this.shortLinkService.reloadConfig(fresh); // sending new config ti the NotificationService
-
-    System.out.println("Config reloaded from disk.");
+    System.out.println("Config reloaded.");
   }
 
   // =========================
