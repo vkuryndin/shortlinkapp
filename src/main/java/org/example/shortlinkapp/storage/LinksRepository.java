@@ -13,7 +13,7 @@ import org.example.shortlinkapp.util.TimeUtils;
 public class LinksRepository {
   private static final Type LIST_TYPE = new TypeToken<List<ShortLink>>() {}.getType();
 
-  private List<ShortLink> cache;
+  private final List<ShortLink> cache;
   private final java.util.concurrent.atomic.AtomicLong seq =
       new java.util.concurrent.atomic.AtomicLong(0L);
 

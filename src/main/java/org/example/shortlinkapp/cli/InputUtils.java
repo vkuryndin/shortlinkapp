@@ -6,7 +6,7 @@ import java.util.Scanner;
 
 public final class InputUtils {
 
-  private static final Scanner SC = new Scanner(System.in, StandardCharsets.UTF_8.name());
+  private static final Scanner SC = new Scanner(System.in, StandardCharsets.UTF_8);
 
   private InputUtils() {}
 
