@@ -237,3 +237,36 @@ The pipeline uploads:
 - Artifacts are stored for 7 days
 - Reports are uploaded even if the build fails
 
+---
+## Static Analysis (GitHub Actions) - additional static analysis workflow
+
+This repository includes a dedicated **Static Analysis** workflow that runs **Spotless**, **Checkstyle**, and **SpotBugs** on every change to Java and build/config files.
+
+**When it runs**
+- On `push` to: `main`, `master`, `develop`, and any `feature/**` branch
+- On all `pull_request`s
+- Only triggers if relevant files change: `**/*.java`, Gradle files, `config/checkstyle/**`, or the workflow itself
+
+**What it does**
+- Executes:
+    - `spotlessCheck`
+    - `checkstyleMain` and `checkstyleTest`
+    - `spotbugsMain` and `spotbugsTest`
+- Uses JDK 17 and Gradle cache for faster runs
+- Concurrency prevents overlapping runs per ref
+
+**Outputs & reports**
+- **Spotless**: uploads `.diff` files (if formatting violations exist)
+- **Checkstyle**: HTML reports under `build/reports/checkstyle`
+- **SpotBugs**: HTML/XML reports uploaded as artifacts:
+    - `build/reports/spotbugs/main.html` / `test.html`
+    - `build/reports/spotbugs/main.xml` / `test.xml`
+- A short summary is added to the job’s “Summary” tab
+
+**How to fix failures locally**
+
+# Format code automatically
+    ./gradlew spotlessApply
+
+# Re-run checks
+    ./gradlew spotlessCheck checkstyleMain checkstyleTest spotbugsMain spotbugsTest

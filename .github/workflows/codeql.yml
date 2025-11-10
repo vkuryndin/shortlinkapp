@@ -2,11 +2,11 @@ name: CodeQL
 
 on:
   push:
-    branches: [ "**" ]
+    branches: ["**"]
   pull_request:
-    branches: [ "**" ]
+    branches: ["**"]
   schedule:
-    - cron: "17 3 * * 1"   # daily on monday
+    - cron: "17 3 * * 1"   # Weekly scan
   workflow_dispatch:
 
 permissions:
@@ -16,37 +16,33 @@ permissions:
 
 jobs:
   analyze:
-    name: Analyze (CodeQL)
+    name: CodeQL Static Analysis
     runs-on: ubuntu-latest
     timeout-minutes: 60
 
     strategy:
       fail-fast: false
       matrix:
-        language: [ "java" ]
+        language: ["java"]
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # Если у тебя сабмодули/генерируемый код — раскомментируй Java setup,
-      # но CodeQL сам поднимет JDK при autobuild.
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v3
         with:
           languages: ${{ matrix.language }}
           queries: security-and-quality
 
-      # Попытка автосборки проекта (CodeQL сам найдёт Gradle/Maven)
       - name: Autobuild
         uses: github/codeql-action/autobuild@v3
 
-      # Если autobuild вдруг не справится (редко для Gradle),
-      # закомментируй шаг выше и раскомментируй этот блок:
-      # - name: Manual build (Gradle)
+      # If autobuild fails for any reason, uncomment this block and comment out the autobuild step.
+      # - name: Manual Gradle build
       #   run: |
       #     chmod +x gradlew
-      #     ./gradlew clean build --no-daemon
+      #     ./gradlew clean build --no-daemon --stacktrace
 
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v3

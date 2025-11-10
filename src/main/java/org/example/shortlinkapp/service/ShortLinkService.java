@@ -203,8 +203,11 @@ public class ShortLinkService {
     if (l.status != Status.DELETED && TimeUtils.isExpired(now, l.expiresAt)) {
       l.status = Status.EXPIRED;
       repo.update(l);
-      events.expired(l.ownerUuid, l.shortCode, "Link expired at " + l.expiresAt);
-      System.out.println("Link " + cfg.baseUrl + l.shortCode + " expired at " + l.expiresAt + ".");
+      if (events != null) {
+        events.expired(l.ownerUuid, l.shortCode, "Link expired at " + l.expiresAt);
+        System.out.println(
+            "Link " + cfg.baseUrl + l.shortCode + " expired at " + l.expiresAt + ".");
+      }
       return;
     }
     if (l.status == Status.DELETED) {
@@ -216,12 +219,14 @@ public class ShortLinkService {
     if (l.clickLimit != null && l.clickCount >= l.clickLimit) {
       l.status = Status.LIMIT_REACHED;
       repo.update(l);
-      events.limitReached(
-          l.ownerUuid,
-          l.shortCode,
-          "Click limit reached (" + l.clickCount + "/" + l.clickLimit + ")");
-      System.out.println(
-          "Click limit reached (" + l.clickCount + "/" + l.clickLimit + "). Link is blocked.");
+      if (events != null) {
+        events.limitReached(
+            l.ownerUuid,
+            l.shortCode,
+            "Click limit reached (" + l.clickCount + "/" + l.clickLimit + ")");
+        System.out.println(
+            "Click limit reached (" + l.clickCount + "/" + l.clickLimit + "). Link is blocked.");
+      }
       return;
     }
 
