@@ -1,37 +1,9 @@
 [
   {
-    "ts": "2025-11-04T13:04:52.1717937",
-    "type": "LIMIT_REACHED",
-    "ownerUuid": "f2e3032b-a54d-41d6-ade0-db2ed170a6fe",
-    "shortCode": "edfsDce",
-    "message": "Click limit reached (1/1)"
-  },
-  {
-    "ts": "2025-11-10T02:27:30.8982768",
-    "type": "EXPIRED",
-    "ownerUuid": "f2e3032b-a54d-41d6-ade0-db2ed170a6fe",
-    "shortCode": "0wQjGBv",
-    "message": "Auto-cleanup: expired at 2025-11-05T12:22:40.708140500"
-  },
-  {
-    "ts": "2025-11-10T02:27:30.9003173",
-    "type": "EXPIRED",
-    "ownerUuid": "f2e3032b-a54d-41d6-ade0-db2ed170a6fe",
-    "shortCode": "wIgNTF2",
-    "message": "Auto-cleanup: expired at 2025-11-05T12:34:17.894828500"
-  },
-  {
-    "ts": "2025-11-10T02:27:30.9033113",
-    "type": "EXPIRED",
-    "ownerUuid": "f2e3032b-a54d-41d6-ade0-db2ed170a6fe",
-    "shortCode": "VRne5x9",
-    "message": "Auto-cleanup: expired at 2025-11-05T15:34:57.459074800"
-  },
-  {
-    "ts": "2025-11-10T02:27:30.9053061",
-    "type": "EXPIRED",
-    "ownerUuid": "eefc3fdb-3485-4c31-b606-13d7834e41de",
-    "shortCode": "sllrIPK",
-    "message": "Auto-cleanup: expired at 2025-11-05T15:36:08.036566900"
+    "ts": "2025-11-10T15:14:00.6560196",
+    "type": "INFO",
+    "ownerUuid": "11111111-1111-1111-1111-111111111111",
+    "shortCode": "X1",
+    "message": "hello"
   }
 ]
