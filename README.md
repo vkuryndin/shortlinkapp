@@ -270,3 +270,50 @@ This repository includes a dedicated **Static Analysis** workflow that runs **Sp
 
 # Re-run checks
     ./gradlew spotlessCheck checkstyleMain checkstyleTest spotbugsMain spotbugsTest
+
+## Javadoc (GitHub Actions) — API documentation build
+
+This repository includes a dedicated **Javadoc** workflow that builds documentation for both **main** and **test** sources.
+
+**When it runs**
+- On `push` to: `main`, `master`, `develop`
+- Manual trigger via `workflow_dispatch`
+
+**What it does**
+- Runs:
+    - `./gradlew javadoc`
+    - `./gradlew testJavadoc` (test sources with relaxed `Xdoclint:none`)
+- Uses Gradle cache and JDK 17
+
+**Outputs & artifacts**
+- `build/docs/javadoc` → uploaded as **javadoc**
+- `build/docs/testJavadoc` → uploaded as **javadoc-tests**
+
+**Run locally**
+
+    ./gradlew clean javadoc testJavadoc
+    open build/docs/javadoc/index.html
+
+---
+
+## **CodeQL (GitHub Actions) — code scanning & security analysis**
+
+A dedicated **CodeQL** workflow performs advanced security and quality scanning for Java sources.
+
+**When it runs**
+- On every `push` and `pull_request` (all branches)
+- Weekly scheduled scan
+- Manual trigger via `workflow_dispatch`
+
+**What it does**
+- Initializes CodeQL with `security-and-quality` queries
+- Performs autobuild of the project
+- Runs full static analysis and uploads results to GitHub Security
+
+**Outputs**
+- Findings appear under **Security → Code scanning alerts**
+- Full SARIF reports stored automatically by GitHub
+
+**Run local build sanity check**
+
+    ./gradlew clean build --no-daemon
