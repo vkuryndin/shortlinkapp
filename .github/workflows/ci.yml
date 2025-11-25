@@ -6,9 +6,21 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest  # Single OS runner (Ubuntu Linux)
+    runs-on: ${{ matrix.os }}
+    #previous implementation
+    #runs-on: ubuntu-latest  # Single OS runner (Ubuntu Linux)
+
     permissions:
       contents: write   # Needed to commit updated coverage badges back to the repo
+
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest      # Linux
+          - windows-latest     # Windows
+          - macos-14           # macOS Apple Silicon (arm64)
+          - macos-15-intel     # macOS Intel (x86_64)
 
     steps:
       # 1) Checkout the repository code
@@ -30,23 +42,46 @@ jobs:
       - name: Make Gradle wrapper executable
         run: chmod +x gradlew
 
-      # 5) Main CI step: full Gradle build
-      # the only Gradle launch: clean + build (including check, jacoco, spotbugs and so on)
-      - name: Build (tests + coverage gate)
+      # 5a) Main CI step for Linux/macOS: full Gradle build
+      - name: Build (tests + coverage gate) [Linux/macOS]
+        if: runner.os != 'Windows'
         run: ./gradlew clean build --no-daemon --stacktrace
 
-      # 6) Main CI step: full Gradle build
-      - name: Build fat JAR (all dependencies)
+      # 5b) Main CI step for Windows: use gradlew.bat
+      - name: Build (tests + coverage gate) [Windows]
+        if: runner.os == 'Windows'
+        run: gradlew.bat clean build --no-daemon --stacktrace
+
+      # 5) Main CI step: full Gradle build
+      # the only Gradle launch: clean + build (including check, jacoco, spotbugs and so on)
+      # - name: Build (tests + coverage gate)
+      #   run: ./gradlew clean build --no-daemon --stacktrace
+
+      # 6) Main CI step: full Gradle build with fat jar (all dependencies)
+      #- name: Build fat JAR (all dependencies)
+      #  run: ./gradlew shadowJar --no-daemon --stacktrace
+
+      # 6a) Build fat JAR (all dependencies) using Shadow plugin on Linux/macOS
+      - name: Build fat JAR (all dependencies) [Linux/macOS]
+        if: runner.os != 'Windows'
         run: ./gradlew shadowJar --no-daemon --stacktrace
+
+      # 6b) Build fat JAR (all dependencies) on Windows
+      - name: Build fat JAR (all dependencies) [Windows]
+        if: runner.os == 'Windows'
+        run: gradlew.bat shadowJar --no-daemon --stacktrace
 
       # 7) Compute a safe, unique artifact name based on branch name and run number
       - name: Compute safe artifact name
         id: name
         shell: bash
+        env:
+          MATRIX_OS: ${{ matrix.os }}
         run: |
           ref="${GITHUB_HEAD_REF:-${GITHUB_REF_NAME}}"
-          ref="${ref//\//-}"   # change all / to -
-          echo "safe_name=shortlinkapp-${ref}-${GITHUB_RUN_NUMBER}" >> "$GITHUB_OUTPUT"
+          ref="${ref//\//-}"          # replace "/" with "-"
+          os="${MATRIX_OS//\//-}"     # sanitize OS label
+          echo "safe_name=shortlinkapp-${ref}-${os}-${GITHUB_RUN_NUMBER}" >> "$GITHUB_OUTPUT"
 
       # 8) "Deploy" the built JAR artifacts (we upload all compiled artifacts: simple and fat with all dependencies):
       # Upload the JAR produced by the build so it can be downloaded from the Actions UI.
@@ -61,8 +96,9 @@ jobs:
 
       # 9) Run the CLI fat JAR on the GitHub runner (simple smoke test)
       #    We feed 'q' to stdin to exit gracefully after showing the menu.
+      #    We only do this on Linux to avoid duplicating the same check on all OSes.
       - name: Run CLI smoke test on GitHub runner
-        if: success()     # run only if build & artifacts upload succeeded
+        if: success() && matrix.os == 'ubuntu-latest'    # previous -if: success()     # run only if build & artifacts upload succeeded
         shell: bash
         run: |
           set -e
