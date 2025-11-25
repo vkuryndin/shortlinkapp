@@ -8,9 +8,11 @@ import org.gradle.api.tasks.javadoc.Javadoc
 
 plugins {
     java
+    application
     id("checkstyle")
     id("com.diffplug.spotless") version "6.25.0"
     id("com.github.spotbugs") version "6.2.4"
+    id("com.github.johnrengelman.shadow") version "8.1.1"
     jacoco
 }
 
@@ -25,6 +27,11 @@ java {
 
 repositories {
     mavenCentral()
+}
+
+application {
+    // Entry point of the CLI application (class with public static void main(String[] args))
+    mainClass.set("org.example.shortlinkapp.app.Main")
 }
 
 dependencies {
@@ -208,4 +215,9 @@ tasks.register<Javadoc>("testJavadoc") {
 tasks.named<Javadoc>("javadoc") {
     // Optional: relax doclint for main too
     (options as StandardJavadocDocletOptions).addBooleanOption("Xdoclint:none", true)
+}
+
+tasks.build {
+    // Ensure that the fat JAR is also built as part of the standard build lifecycle
+    dependsOn(tasks.shadowJar)
 }

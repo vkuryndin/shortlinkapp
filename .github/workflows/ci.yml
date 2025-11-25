@@ -35,7 +35,11 @@ jobs:
       - name: Build (tests + coverage gate)
         run: ./gradlew clean build --no-daemon --stacktrace
 
-      # 6) Compute a safe, unique artifact name based on branch name and run number
+      # 6) Main CI step: full Gradle build
+      - name: Build fat JAR (all dependencies)
+        run: ./gradlew shadowJar --no-daemon --stacktrace
+
+      # 7) Compute a safe, unique artifact name based on branch name and run number
       - name: Compute safe artifact name
         id: name
         shell: bash
@@ -44,8 +48,8 @@ jobs:
           ref="${ref//\//-}"   # change all / to -
           echo "safe_name=shortlinkapp-${ref}-${GITHUB_RUN_NUMBER}" >> "$GITHUB_OUTPUT"
 
-       # 7) "Deploy" the built JAR artifact:
-       #    Upload the JAR produced by the build so it can be downloaded from the Actions UI.
+      # 8) "Deploy" the built JAR artifact:
+      #    Upload the JAR produced by the build so it can be downloaded from the Actions UI.
       - name: Upload build artifacts (JAR)
         if: success()    # Only if the build finished successfully
         uses: actions/upload-artifact@v4
@@ -55,7 +59,7 @@ jobs:
           if-no-files-found: warn
           retention-days: 7     # Keep artifact for 7 days
 
-      # 8) Upload JUnit test reports (HTML) for inspection
+      # 9) Upload JUnit test reports (HTML) for inspection
       # Always attaching report, even if build fails
       - name: Upload JUnit test report
         if: always()
@@ -66,7 +70,7 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
-      # 9) Upload JaCoCo HTML coverage report
+      # 10) Upload JaCoCo HTML coverage report
       - name: Upload JaCoCo HTML report
         if: always()
         uses: actions/upload-artifact@v4
@@ -76,7 +80,7 @@ jobs:
           if-no-files-found: warn
           retention-days: 7
 
-      # 10) Upload SpotBugs reports (static analysis)
+      # 11) Upload SpotBugs reports (static analysis)
       - name: Upload SpotBugs reports
         if: always()
         uses: actions/upload-artifact@v4
@@ -88,7 +92,7 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
-      # 11) Upload Checkstyle reports (code style violations)
+      # 12) Upload Checkstyle reports (code style violations)
       - name: Upload Checkstyle reports
         if: always()
         uses: actions/upload-artifact@v4
@@ -99,7 +103,7 @@ jobs:
           retention-days: 7
 
 
-      # 12) Generate JaCoCo SVG badges (line coverage + branch coverage)
+      # 13) Generate JaCoCo SVG badges (line coverage + branch coverage)
       #     Only for non-PR builds (we do not want to commit from pull requests).
       - name: Generate JaCoCo badges
         if: github.event_name != 'pull_request'
@@ -114,7 +118,7 @@ jobs:
           # optionally, for the build not to fail, if CSV not found:
           # on-missing-report: warn
 
-      # 13) Commit and push the updated coverage badges back to the repository
+      # 14) Commit and push the updated coverage badges back to the repository
       - name: Commit badges
         if: github.event_name != 'pull_request'
         uses: EndBug/add-and-commit@v9
