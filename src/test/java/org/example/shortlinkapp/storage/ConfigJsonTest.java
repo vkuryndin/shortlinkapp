@@ -270,11 +270,7 @@ public class ConfigJsonTest {
         "getConfigPath() should be 'data/config.json' (relative).");
     assertTrue(out.contains("ABSOLUTE=false"), "Path should be relative (not absolute).");
 
-    // But RESOLVED must point exactly under our tempDir/data/config.json.
-    // On macOS /var and /private/var can be different strings but the same real path,
-    // so we compare canonical (real) paths instead of raw strings.
-
-    // 1) takin out RESOLVED= string...
+    // --- Parse RESOLVED=... line from the child process output ---
     String resolvedLine =
         Arrays.stream(out.split("\\R"))
             .filter(line -> line.startsWith("RESOLVED="))
@@ -282,35 +278,65 @@ public class ConfigJsonTest {
             .orElseThrow(() -> new AssertionError("RESOLVED line not found in output:\n" + out));
 
     String resolvedStr = resolvedLine.substring("RESOLVED=".length()).trim();
+    Path resolved = Path.of(resolvedStr).toAbsolutePath().normalize();
 
-    Path expected = tempDir.resolve("data").resolve("config.json");
-    Path resolved = Path.of(resolvedStr);
+    // Expected location: <tempDir>/data/config.json
+    Path expected = tempDir.resolve("data").resolve("config.json").toAbsolutePath().normalize();
 
-    Path expectedCanonical = toCanonical(expected);
-    Path resolvedCanonical = toCanonical(resolved);
+    // Ensure the expected file actually exists, so Files.isSameFile can do a proper OS-level check.
+    ensureFileExists(expected);
 
-    assertEquals(
-        expectedCanonical,
-        resolvedCanonical,
+    boolean same = isSameFileOrEqual(expected, resolved);
+
+    assertTrue(
+        same,
         () ->
             "Resolved path must point to config.json under tempDir."
                 + System.lineSeparator()
                 + " expected: "
-                + expectedCanonical
+                + expected
                 + System.lineSeparator()
                 + "   actual: "
-                + resolvedCanonical);
+                + resolved);
+  }
+
+  /** Best-effort: make sure the file exists so Files.isSameFile can work reliably. */
+  private static void ensureFileExists(Path path) {
+    if (path == null) {
+      return; // defensive: nothing to do
+    }
+
+    try {
+      Path parent = path.getParent();
+      if (parent != null) {
+        Files.createDirectories(parent);
+      }
+      if (Files.notExists(path)) {
+        Files.createFile(path);
+      }
+    } catch (IOException ignored) {
+      // Best-effort helper for tests: if creation fails, we'll still have logical checks later.
+    }
   }
 
   /**
-   * Returns a canonical representation of the path: try to resolve symlinks (toRealPath), fall back
-   * to normalized absolute path if file doesn't exist yet.
+   * Cross-platform comparison that treats symlinks and Windows short (8.3) vs long paths as
+   * pointing to the same location when appropriate.
    */
-  private static Path toCanonical(Path p) throws IOException {
+  private static boolean isSameFileOrEqual(Path expected, Path resolved) {
     try {
-      return p.toRealPath();
+      // OS-level comparison; handles symlinks and 8.3 names on Windows.
+      return Files.isSameFile(expected, resolved);
     } catch (IOException e) {
-      return p.toAbsolutePath().normalize();
+      // Fallback: compare normalized absolute strings
+      String eStr = expected.toAbsolutePath().normalize().toString();
+      String rStr = resolved.toAbsolutePath().normalize().toString();
+      if (File.separatorChar == '\\') {
+        // Windows: case-insensitive
+        return eStr.equalsIgnoreCase(rStr);
+      } else {
+        return eStr.equals(rStr);
+      }
     }
   }
 }
