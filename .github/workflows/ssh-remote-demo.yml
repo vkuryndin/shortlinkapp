@@ -62,20 +62,30 @@ jobs:
         run: |
           set -e
 
-          # Find the latest fat JAR (*-all.jar) built by Shadow
-          JAR=$(ls -t build/libs/*-all.jar | head -n 1)
+          echo "Local runner info:"
+          echo "  pwd: $(pwd)"
+          echo "  contents of build/libs:"
+          ls -l build/libs || echo "build/libs not found"
 
-          if [[ -z "$JAR" ]]; then
+          # Find the latest fat JAR (*-all.jar) built by Shadow (relative path)
+          JAR_REL=$(ls -t build/libs/*-all.jar | head -n 1 || true)
+
+          if [[ -z "$JAR_REL" ]]; then
             echo "Fat JAR (*-all.jar) not found in build/libs"
             exit 1
           fi
 
-          echo "Using fat JAR: $JAR"
+          # Convert to absolute path so SSH session can see the same file
+          JAR="$(cd "$(dirname "$JAR_REL")" && pwd)/$(basename "$JAR_REL")"
+
+          echo "Using fat JAR (absolute path): $JAR"
 
           # Execute the CLI on the "remote" host via SSH.
           # We pass "q" to stdin so the app prints banner/menu and exits.
           OUTPUT=$(ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no localhost \
-            "printf 'q\n' | java -jar '$JAR'")
+            "echo 'Remote PWD:' \$(pwd); \
+             ls -l '$JAR' || echo 'JAR not visible on remote FS'; \
+             printf 'q\n' | java -jar '$JAR'")
 
           echo "----- SSH CLI output start -----"
           echo "$OUTPUT"
