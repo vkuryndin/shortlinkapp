@@ -3,8 +3,12 @@ name: CodeQL
 on:
   push:
     branches: ["**"]      # Run CodeQL on push to any branch
+    paths-ignore:
+      - ".github/workflows/**"  # do NOT trigger when only workflow files change
   pull_request:
     branches: ["**"]      # And on all pull requests
+    paths-ignore:
+      - ".github/workflows/**"  # do NOT trigger when only workflow files change
   schedule:
     - cron: "17 3 * * 1"  # Weekly scheduled scan (every Monday at 03:17 UTC)
   workflow_dispatch:      # Manual trigger from GitHub UI
