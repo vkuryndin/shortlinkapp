@@ -49,7 +49,7 @@ jobs:
           echo "safe_name=shortlinkapp-${ref}-${GITHUB_RUN_NUMBER}" >> "$GITHUB_OUTPUT"
 
       # 8) "Deploy" the built JAR artifacts (we upload all compiled artifacts: simple and fat with all dependencies):
-      #    Upload the JAR produced by the build so it can be downloaded from the Actions UI.
+      # Upload the JAR produced by the build so it can be downloaded from the Actions UI.
       - name: Upload build artifacts (JAR)
         if: success()    # Only if the build finished successfully
         uses: actions/upload-artifact@v4
@@ -65,33 +65,32 @@ jobs:
         if: success()     # run only if build & artifacts upload succeeded
         shell: bash
         run: |
-         set -e
-        
-         JAR=$(ls -t build/libs/*-all.jar | head -n 1)
-        
-         if [[ -z "$JAR" ]]; then
-           echo "Fat JAR (*-all.jar) not found in build/libs"
-           exit 1
-         fi
-        
-         echo "Using fat JAR: $JAR"
-        
-        # Capture output of the CLI
-         OUTPUT=$(printf 'q\n' | java -jar "$JAR")
-        
-        # Print output to the GitHub Actions log
-         echo "----- CLI output start -----"
-         echo "$OUTPUT"
-         echo "----- CLI output end -----"
-        
-        # Simple assertion: check for banner line
-         echo "$OUTPUT" | grep -q "ShortLink CLI (Java)" || {
-           echo "Expected banner 'ShortLink CLI (Java)' not found in output"
-           exit 1
-         }
-        
-         echo "CLI smoke test finished successfully."
+          set -e
 
+          JAR=$(ls -t build/libs/*-all.jar | head -n 1)
+
+          if [[ -z "$JAR" ]]; then
+            echo "Fat JAR (*-all.jar) not found in build/libs"
+            exit 1
+          fi
+
+          echo "Using fat JAR: $JAR"
+
+          # Capture output of the CLI
+          OUTPUT=$(printf 'q\n' | java -jar "$JAR")
+
+          # Print output to the GitHub Actions log
+          echo "----- CLI output start -----"
+          echo "$OUTPUT"
+          echo "----- CLI output end -----"
+
+          # Simple assertion: check for banner line
+          echo "$OUTPUT" | grep -q "ShortLink CLI (Java)" || {
+            echo "Expected banner 'ShortLink CLI (Java)' not found in output"
+            exit 1
+          }
+
+          echo "CLI smoke test finished successfully."
       # 10) Upload JUnit test reports (HTML) for inspection
       # Always attaching report, even if build fails
       - name: Upload JUnit test report
