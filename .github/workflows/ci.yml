@@ -60,7 +60,7 @@ jobs:
           retention-days: 7     # Keep artifact for 7 days
 
       # 9) Run the CLI fat JAR on the GitHub runner (simple smoke test)
-      #    We feed "q" to stdin to exit gracefully after showing the menu.
+      #    We feed 'q' to stdin to exit gracefully after showing the menu.
       - name: Run CLI smoke test on GitHub runner
         if: success()     # run only if build & artifacts upload succeeded
         shell: bash
