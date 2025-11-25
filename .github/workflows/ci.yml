@@ -48,7 +48,7 @@ jobs:
           ref="${ref//\//-}"   # change all / to -
           echo "safe_name=shortlinkapp-${ref}-${GITHUB_RUN_NUMBER}" >> "$GITHUB_OUTPUT"
 
-      # 8) "Deploy" the built JAR artifact:
+      # 8) "Deploy" the built JAR artifacts (we upload all compiled artifacts: simple and fat with all dependencies):
       #    Upload the JAR produced by the build so it can be downloaded from the Actions UI.
       - name: Upload build artifacts (JAR)
         if: success()    # Only if the build finished successfully
@@ -59,7 +59,40 @@ jobs:
           if-no-files-found: warn
           retention-days: 7     # Keep artifact for 7 days
 
-      # 9) Upload JUnit test reports (HTML) for inspection
+      # 9) Run the CLI fat JAR on the GitHub runner (simple smoke test)
+      #    We feed "q" to stdin to exit gracefully after showing the menu.
+      - name: Run CLI smoke test on GitHub runner
+        if: success()     # run only if build & artifacts upload succeeded
+        shell: bash
+        run: |
+         set -e
+        
+         JAR=$(ls -t build/libs/*-all.jar | head -n 1)
+        
+         if [[ -z "$JAR" ]]; then
+           echo "Fat JAR (*-all.jar) not found in build/libs"
+           exit 1
+         fi
+        
+         echo "Using fat JAR: $JAR"
+        
+        # Capture output of the CLI
+         OUTPUT=$(printf 'q\n' | java -jar "$JAR")
+        
+        # Print output to the GitHub Actions log
+         echo "----- CLI output start -----"
+         echo "$OUTPUT"
+         echo "----- CLI output end -----"
+        
+        # Simple assertion: check for banner line
+         echo "$OUTPUT" | grep -q "ShortLink CLI (Java)" || {
+           echo "Expected banner 'ShortLink CLI (Java)' not found in output"
+           exit 1
+         }
+        
+         echo "CLI smoke test finished successfully."
+
+      # 10) Upload JUnit test reports (HTML) for inspection
       # Always attaching report, even if build fails
       - name: Upload JUnit test report
         if: always()
@@ -70,7 +103,7 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
-      # 10) Upload JaCoCo HTML coverage report
+      # 11) Upload JaCoCo HTML coverage report
       - name: Upload JaCoCo HTML report
         if: always()
         uses: actions/upload-artifact@v4
@@ -80,7 +113,7 @@ jobs:
           if-no-files-found: warn
           retention-days: 7
 
-      # 11) Upload SpotBugs reports (static analysis)
+      # 12) Upload SpotBugs reports (static analysis)
       - name: Upload SpotBugs reports
         if: always()
         uses: actions/upload-artifact@v4
@@ -92,7 +125,7 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
-      # 12) Upload Checkstyle reports (code style violations)
+      # 13) Upload Checkstyle reports (code style violations)
       - name: Upload Checkstyle reports
         if: always()
         uses: actions/upload-artifact@v4
@@ -103,7 +136,7 @@ jobs:
           retention-days: 7
 
 
-      # 13) Generate JaCoCo SVG badges (line coverage + branch coverage)
+      # 14) Generate JaCoCo SVG badges (line coverage + branch coverage)
       #     Only for non-PR builds (we do not want to commit from pull requests).
       - name: Generate JaCoCo badges
         if: github.event_name != 'pull_request'
@@ -118,7 +151,7 @@ jobs:
           # optionally, for the build not to fail, if CSV not found:
           # on-missing-report: warn
 
-      # 14) Commit and push the updated coverage badges back to the repository
+      # 15) Commit and push the updated coverage badges back to the repository
       - name: Commit badges
         if: github.event_name != 'pull_request'
         uses: EndBug/add-and-commit@v9
