@@ -2,7 +2,7 @@ name: Static Analysis
 
 on:
   push:
-    branches: [ main, master, develop, feature/** ]
+    branches: [ main, master, develop, feature/** ]   # Run on main branches and feature branches
     paths:
       - '**/*.java'
       - 'build.gradle'
@@ -26,6 +26,7 @@ on:
 permissions:
   contents: read
 
+# Ensure only one static-analysis run per branch is active at a time
 concurrency:
   group: static-analysis-${{ github.ref }}
   cancel-in-progress: true
@@ -36,22 +37,29 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # 1) Checkout the repository
       - name: Checkout
         uses: actions/checkout@v4
 
+      # 2) Install JDK 17 (Temurin distribution)
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
 
+      # 3) Configure Gradle with caching (official Gradle GitHub Action)
       - name: Setup Gradle (with caching)
         uses: gradle/actions/setup-gradle@v4
 
+      # 4) Make Gradle wrapper executable (required on Linux/macOS)
       - name: Make Gradle wrapper executable
         run: chmod +x gradlew
 
-      # Run only static-analysis tasks (no compilation tests or packaging beyond what they need)
+      # 5) Run only static-analysis tasks (no compilation tests or packaging beyond what they need)
+        #    - spotlessCheck: formatting check
+        #    - checkstyleMain/checkstyleTest: code style rules
+        #    - spotbugsMain/spotbugsTest: static bug detection
       - name: Run static checks (Spotless, Checkstyle, SpotBugs)
         run: |
           ./gradlew \
@@ -60,6 +68,7 @@ jobs:
             spotbugsMain spotbugsTest \
             --no-daemon --stacktrace
 
+      # 6) Upload Spotless diff files (if any formatting issues detected)
       # Always publish the HTML reports to help debugging even on failures
       - name: Upload Spotless diff (if any)
         if: always()
@@ -70,6 +79,7 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
+      # 7) Upload Checkstyle HTML/XML reports
       - name: Upload Checkstyle reports
         if: always()
         uses: actions/upload-artifact@v4
@@ -79,6 +89,7 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
+      # 8) Upload SpotBugs reports (HTML + XML)
       - name: Upload SpotBugs reports
         if: always()
         uses: actions/upload-artifact@v4
@@ -92,7 +103,7 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
-      # Optional: write a brief summary to the job summary page
+      # 9) write a brief summary to the job summary page
       - name: Summary
         if: always()
         run: |

@@ -2,17 +2,17 @@ name: CodeQL
 
 on:
   push:
-    branches: ["**"]
+    branches: ["**"]      # Run CodeQL on push to any branch
   pull_request:
-    branches: ["**"]
+    branches: ["**"]      # And on all pull requests
   schedule:
-    - cron: "17 3 * * 1"   # Weekly scan
-  workflow_dispatch:
+    - cron: "17 3 * * 1"  # Weekly scheduled scan (every Monday at 03:17 UTC)
+  workflow_dispatch:      # Manual trigger from GitHub UI
 
 permissions:
-  contents: read
-  security-events: write
-  actions: read
+  contents: read              # Read access to the repository
+  security-events: write      # Required to upload CodeQL analysis results to the Security tab
+  actions: read               # Recommended for CodeQL
 
 jobs:
   analyze:
@@ -23,28 +23,34 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        language: ["java"]
+        language: ["java"]    # Analyze Java code
 
     steps:
+      # 1) Checkout the repository
       - name: Checkout
         uses: actions/checkout@v4
 
+      # 2) Initialize CodeQL with the chosen language and query suite
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v3
         with:
           languages: ${{ matrix.language }}
           queries: security-and-quality
 
+      # 3) Autobuild step:
+      #    For many Java projects CodeQL can build the project automatically.
       - name: Autobuild
         uses: github/codeql-action/autobuild@v3
 
+      # For debugging purposes:
       # If autobuild fails for any reason, uncomment this block and comment out the autobuild step.
       # - name: Manual Gradle build
       #   run: |
       #     chmod +x gradlew
       #     ./gradlew clean build --no-daemon --stacktrace
 
+      # 4) Run CodeQL analysis and upload results
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v3
         with:
-          category: "/language:${{ matrix.language }}"
+          category: "/language:${{ matrix.language }}"   #Java is used here

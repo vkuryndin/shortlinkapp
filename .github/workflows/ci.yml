@@ -1,36 +1,41 @@
 name: CI
 
 on:
-  push:
-  pull_request:
+  push:    # Run CI on every push to any branch
+  pull_request: # and on every pull request (for pre-merge checks)
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest  # Single OS runner (Ubuntu Linux)
     permissions:
-      contents: write
+      contents: write   # Needed to commit updated coverage badges back to the repo
 
     steps:
+      # 1) Checkout the repository code
       - name: Checkout
         uses: actions/checkout@v4
 
+      # 2) Install JDK 17 (Temurin distribution)
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
 
+      # 3) Configure Gradle with caching (official Gradle GitHub Action)
       - name: Setup Gradle (with caching)
         uses: gradle/actions/setup-gradle@v4
 
+      # 4) Make Gradle wrapper executable (required on Linux/macOS)
       - name: Make Gradle wrapper executable
         run: chmod +x gradlew
 
+      # 5) Main CI step: full Gradle build
       # the only Gradle launch: clean + build (including check, jacoco, spotbugs and so on)
       - name: Build (tests + coverage gate)
         run: ./gradlew clean build --no-daemon --stacktrace
 
-      # computing safe name for artifact
+      # 6) Compute a safe, unique artifact name based on branch name and run number
       - name: Compute safe artifact name
         id: name
         shell: bash
@@ -39,16 +44,18 @@ jobs:
           ref="${ref//\//-}"   # change all / to -
           echo "safe_name=shortlinkapp-${ref}-${GITHUB_RUN_NUMBER}" >> "$GITHUB_OUTPUT"
 
-      # JAR — only if build is green
+       # 7) "Deploy" the built JAR artifact:
+       #    Upload the JAR produced by the build so it can be downloaded from the Actions UI.
       - name: Upload build artifacts (JAR)
-        if: success()
+        if: success()    # Only if the build finished successfully
         uses: actions/upload-artifact@v4
         with:
           name: ${{ steps.name.outputs.safe_name }}
-          path: '**/build/libs/*.jar'
+          path: '**/build/libs/*.jar'    # All JARs under any build/libs directory
           if-no-files-found: warn
-          retention-days: 7
+          retention-days: 7     # Keep artifact for 7 days
 
+      # 8) Upload JUnit test reports (HTML) for inspection
       # Always attaching report, even if build fails
       - name: Upload JUnit test report
         if: always()
@@ -59,6 +66,7 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
+      # 9) Upload JaCoCo HTML coverage report
       - name: Upload JaCoCo HTML report
         if: always()
         uses: actions/upload-artifact@v4
@@ -68,6 +76,7 @@ jobs:
           if-no-files-found: warn
           retention-days: 7
 
+      # 10) Upload SpotBugs reports (static analysis)
       - name: Upload SpotBugs reports
         if: always()
         uses: actions/upload-artifact@v4
@@ -79,6 +88,7 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
+      # 11) Upload Checkstyle reports (code style violations)
       - name: Upload Checkstyle reports
         if: always()
         uses: actions/upload-artifact@v4
@@ -88,7 +98,9 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
-      #: generating SVG badges for XML JaCoCo coverage
+
+      # 12) Generate JaCoCo SVG badges (line coverage + branch coverage)
+      #     Only for non-PR builds (we do not want to commit from pull requests).
       - name: Generate JaCoCo badges
         if: github.event_name != 'pull_request'
         uses: cicirello/jacoco-badge-generator@v2.12.1
@@ -102,6 +114,7 @@ jobs:
           # optionally, for the build not to fail, if CSV not found:
           # on-missing-report: warn
 
+      # 13) Commit and push the updated coverage badges back to the repository
       - name: Commit badges
         if: github.event_name != 'pull_request'
         uses: EndBug/add-and-commit@v9

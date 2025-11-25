@@ -2,12 +2,12 @@ name: Javadoc
 
 on:
   push:
-    branches: [ main, master, develop ]
+    branches: [ main, master, develop ]  # Generate Javadoc only for main development branches
     paths:
-      - '**/*.java'
+      - '**/*.java'                      # Trigger only when Java sources change
       - 'build.gradle*'
       - 'settings.gradle*'
-  workflow_dispatch:
+  workflow_dispatch:                     # Manual trigger from GitHub UI
 
 permissions:
   contents: read
@@ -16,39 +16,47 @@ jobs:
   javadoc:
     runs-on: ubuntu-latest
     steps:
+      # 1) Checkout the repository
       - name: Checkout
         uses: actions/checkout@v4
 
+      # 2) Install JDK 17 (Temurin distribution)
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
 
+      # 3) Configure Gradle with caching (official Gradle GitHub Action)
       - name: Setup Gradle (with caching)
         uses: gradle/actions/setup-gradle@v4
 
+      # 4) Make Gradle wrapper executable (required on Linux/macOS)
       - name: Make Gradle wrapper executable
         run: chmod +x gradlew
 
+      # 5) Generate Javadoc for main sources
       - name: Generate Javadoc (main)
         run: ./gradlew javadoc --no-daemon
 
+      # 6) Generate Javadoc for tests (with Xdoclint:none to be more tolerant)
       - name: Generate Javadoc (tests with Xdoclint:none)
         run: ./gradlew testJavadoc --no-daemon
 
+      # 7) Upload main Javadoc as a build artifact (acts as "documentation deployment")
       - name: Upload Javadoc artifact (main)
         uses: actions/upload-artifact@v4
         with:
           name: javadoc
           path: build/docs/javadoc
           if-no-files-found: error
-          retention-days: 14
+          retention-days: 14    # Keep Javadoc for 14 days
 
+      # 8) Upload test Javadoc as a separate artifact
       - name: Upload Javadoc artifact (tests)
         uses: actions/upload-artifact@v4
         with:
           name: javadoc-tests
           path: build/docs/testJavadoc
           if-no-files-found: error
-          retention-days: 14
+          retention-days: 14   # Keep Javadoc for 14 days
