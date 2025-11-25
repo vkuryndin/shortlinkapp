@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
+import java.util.Arrays;
 import java.util.Locale;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.io.TempDir;
@@ -269,10 +270,47 @@ public class ConfigJsonTest {
         "getConfigPath() should be 'data/config.json' (relative).");
     assertTrue(out.contains("ABSOLUTE=false"), "Path should be relative (not absolute).");
 
-    // But RESOLVED must point exactly under our tempDir/data/config.json
-    Path expected = tempDir.resolve("data").resolve("config.json").toAbsolutePath().normalize();
-    assertTrue(
-        out.contains("RESOLVED=" + expected.toString()),
-        "Resolved path must be inside tempDir: " + expected);
+    // But RESOLVED must point exactly under our tempDir/data/config.json.
+    // On macOS /var and /private/var can be different strings but the same real path,
+    // so we compare canonical (real) paths instead of raw strings.
+
+    // 1) takin out RESOLVED= string...
+    String resolvedLine =
+        Arrays.stream(out.split("\\R"))
+            .filter(line -> line.startsWith("RESOLVED="))
+            .findFirst()
+            .orElseThrow(() -> new AssertionError("RESOLVED line not found in output:\n" + out));
+
+    String resolvedStr = resolvedLine.substring("RESOLVED=".length()).trim();
+
+    Path expected = tempDir.resolve("data").resolve("config.json");
+    Path resolved = Path.of(resolvedStr);
+
+    Path expectedCanonical = toCanonical(expected);
+    Path resolvedCanonical = toCanonical(resolved);
+
+    assertEquals(
+        expectedCanonical,
+        resolvedCanonical,
+        () ->
+            "Resolved path must point to config.json under tempDir."
+                + System.lineSeparator()
+                + " expected: "
+                + expectedCanonical
+                + System.lineSeparator()
+                + "   actual: "
+                + resolvedCanonical);
+  }
+
+  /**
+   * Returns a canonical representation of the path: try to resolve symlinks (toRealPath), fall back
+   * to normalized absolute path if file doesn't exist yet.
+   */
+  private static Path toCanonical(Path p) throws IOException {
+    try {
+      return p.toRealPath();
+    } catch (IOException e) {
+      return p.toAbsolutePath().normalize();
+    }
   }
 }
