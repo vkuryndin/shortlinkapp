@@ -83,18 +83,18 @@ jobs:
           # Execute the CLI on the "remote" host via SSH.
           # We pass "q" to stdin so the app prints banner/menu and exits.
           OUTPUT=$(ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no localhost \
-            "echo 'Remote PWD:' \$(pwd); \
-             ls -l '$JAR' || echo 'JAR not visible on remote FS'; \
-             printf 'q\n' | java -jar '$JAR'")
-
+           "echo 'Remote PWD:' \$(pwd); \
+           ls -l '$JAR' || echo 'JAR not visible on remote FS'; \
+           printf '4\nq\n' | java -jar '$JAR'")
+  
           echo "----- SSH CLI output start -----"
           echo "$OUTPUT"
           echo "----- SSH CLI output end -----"
-
+  
           # Simple assertion: banner must be present in the output
           echo "$OUTPUT" | grep -q "ShortLink CLI (Java)" || {
-            echo "Expected banner 'ShortLink CLI (Java)' not found in output"
-            exit 1
+           echo "Expected banner 'ShortLink CLI (Java)' not found in output"
+           exit 1
           }
-
-          echo "SSH-based CLI smoke test finished successfully."
+  
+          echo "SSH-based CLI smoke test (documentation + exit) finished successfully."
