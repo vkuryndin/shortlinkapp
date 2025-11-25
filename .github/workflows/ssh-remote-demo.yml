@@ -1,0 +1,90 @@
+name: SSH Remote Commands Demo
+
+on:
+  # Manual trigger only: run from GitHub UI (Actions -> this workflow -> Run workflow)
+  workflow_dispatch:
+
+jobs:
+  ssh-remote-demo:
+    name: Build & run via SSH on localhost
+    runs-on: ubuntu-latest   #only on ubuntu
+
+    steps:
+      # 1) Checkout the repository code
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # 2) Install JDK 17 (Temurin distribution)
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      # 3) Configure Gradle with caching (official Gradle GitHub Action)
+      - name: Setup Gradle (with caching)
+        uses: gradle/actions/setup-gradle@v4
+
+      # 4) Make Gradle wrapper executable (required on Linux/macOS)
+      - name: Make Gradle wrapper executable
+        run: chmod +x gradlew
+
+      # 5) Build the application and fat JAR (with all dependencies)
+      - name: Build app (tests + fat JAR)
+        run: ./gradlew clean build shadowJar --no-daemon --stacktrace
+
+      # 6) Install and start SSH server on the GitHub runner
+      #    This simulates a "remote host" reachable via SSH.
+      - name: Install and start SSH server (localhost)
+        run: |
+          set -e
+
+          # Install OpenSSH server if it's not present
+          sudo apt-get update
+          sudo apt-get install -y openssh-server
+
+          # Ensure the runtime directory exists and start sshd
+          sudo mkdir -p /run/sshd
+          sudo service ssh start
+
+          # Generate a temporary SSH key pair for the current runner user
+          mkdir -p ~/.ssh
+          ssh-keygen -t rsa -b 4096 -f ~/.ssh/id_rsa -N "" -q
+
+          # Authorize this key for localhost logins
+          cat ~/.ssh/id_rsa.pub >> ~/.ssh/authorized_keys
+          chmod 700 ~/.ssh
+          chmod 600 ~/.ssh/authorized_keys
+
+      # 7) Run the CLI application via SSH (remote command on localhost)
+      - name: Run CLI via SSH on localhost
+        shell: bash
+        run: |
+          set -e
+
+          # Find the latest fat JAR (*-all.jar) built by Shadow
+          JAR=$(ls -t build/libs/*-all.jar | head -n 1)
+
+          if [[ -z "$JAR" ]]; then
+            echo "Fat JAR (*-all.jar) not found in build/libs"
+            exit 1
+          fi
+
+          echo "Using fat JAR: $JAR"
+
+          # Execute the CLI on the "remote" host via SSH.
+          # We pass "q" to stdin so the app prints banner/menu and exits.
+          OUTPUT=$(ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no localhost \
+            "printf 'q\n' | java -jar '$JAR'")
+
+          echo "----- SSH CLI output start -----"
+          echo "$OUTPUT"
+          echo "----- SSH CLI output end -----"
+
+          # Simple assertion: banner must be present in the output
+          echo "$OUTPUT" | grep -q "ShortLink CLI (Java)" || {
+            echo "Expected banner 'ShortLink CLI (Java)' not found in output"
+            exit 1
+          }
+
+          echo "SSH-based CLI smoke test finished successfully."
