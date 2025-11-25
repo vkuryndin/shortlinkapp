@@ -50,7 +50,7 @@ jobs:
       # 5b) Main CI step for Windows: use gradlew.bat
       - name: Build (tests + coverage gate) [Windows]
         if: runner.os == 'Windows'
-        run: gradlew.bat clean build --no-daemon --stacktrace
+        run: .\gradlew.bat clean build --no-daemon --stacktrace
 
       # 5) Main CI step: full Gradle build
       # the only Gradle launch: clean + build (including check, jacoco, spotbugs and so on)
@@ -69,7 +69,7 @@ jobs:
       # 6b) Build fat JAR (all dependencies) on Windows
       - name: Build fat JAR (all dependencies) [Windows]
         if: runner.os == 'Windows'
-        run: gradlew.bat shadowJar --no-daemon --stacktrace
+        run: .\gradlew.bat shadowJar --no-daemon --stacktrace
 
       # 7) Compute a safe, unique artifact name based on branch name and run number
       - name: Compute safe artifact name
@@ -174,7 +174,7 @@ jobs:
       # 14) Generate JaCoCo SVG badges (line coverage + branch coverage)
       #     Only for non-PR builds (we do not want to commit from pull requests).
       - name: Generate JaCoCo badges
-        if: github.event_name != 'pull_request'
+        if: github.event_name != 'pull_request' && matrix.os == 'ubuntu-latest'   #will do only on Linux
         uses: cicirello/jacoco-badge-generator@v2.12.1
         with:
           jacoco-csv-file: build/reports/jacoco/test/jacocoTestReport.csv
@@ -188,7 +188,7 @@ jobs:
 
       # 15) Commit and push the updated coverage badges back to the repository
       - name: Commit badges
-        if: github.event_name != 'pull_request'
+        if: github.event_name != 'pull_request' && matrix.os == 'ubuntu-latest'   #will do only on Linux
         uses: EndBug/add-and-commit@v9
         with:
           add: "badges/*.svg"
