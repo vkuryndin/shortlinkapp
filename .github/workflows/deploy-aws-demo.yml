@@ -33,8 +33,8 @@ jobs:
       - name: Build app (tests + fat JAR)
         run: ./gradlew clean build shadowJar --no-daemon --stacktrace
 
-      # 6) Deploy fat JAR to AWS EC2 and restart the application
-      - name: Deploy fat JAR to AWS EC2 and restart app
+      # 6) Deploy fat JAR to AWS EC2 and start the application
+      - name: Deploy fat JAR to AWS EC2 and start app
         shell: bash
         env:
           AWS_SSH_KEY: ${{ secrets.AWS_SSH_KEY }}
@@ -82,7 +82,8 @@ jobs:
           ssh -i ~/.ssh/aws_ec2_key.pem "$AWS_SSH_USER@$AWS_SSH_HOST" "java -version || { echo 'Java is not installed on remote host'; exit 1; }"
           
           echo "=== Starting new instance ==="
-          ssh -i ~/.ssh/aws_ec2_key.pem "$AWS_SSH_USER@$AWS_SSH_HOST" "nohup java -jar '$REMOTE_JAR' > '$REMOTE_LOG' 2>&1 &"
+          ssh -i ~/.ssh/aws_ec2_key.pem "$AWS_SSH_USER@$AWS_SSH_HOST" \
+          "echo '--- Starting ShortLinkApp at ' \$(date) >> '$REMOTE_LOG'; nohup java -jar '$REMOTE_JAR' >> '$REMOTE_LOG' 2>&1 &"
 
           echo "Application started. Log: $REMOTE_LOG"
           echo "=== Deploy finished successfully ==="
