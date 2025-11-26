@@ -81,9 +81,6 @@ jobs:
           echo "=== Checking Java on remote host ==="
           ssh -i ~/.ssh/aws_ec2_key.pem "$AWS_SSH_USER@$AWS_SSH_HOST" "java -version || { echo 'Java is not installed on remote host'; exit 1; }"
           
-          echo "=== Stopping previous instance (if any) ==="
-          ssh -i ~/.ssh/aws_ec2_key.pem "$AWS_SSH_USER@$AWS_SSH_HOST" "pkill -f 'java -jar $REMOTE_JAR' || true"
-
           echo "=== Starting new instance ==="
           ssh -i ~/.ssh/aws_ec2_key.pem "$AWS_SSH_USER@$AWS_SSH_HOST" "nohup java -jar '$REMOTE_JAR' > '$REMOTE_LOG' 2>&1 &"
 
