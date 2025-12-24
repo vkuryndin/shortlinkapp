@@ -93,7 +93,7 @@ jobs:
     name: security (Upload SBOM to Dependency-Track)
     needs: build_sbom
     if: ${{ github.event_name == 'pull_request' || github.event.inputs.uploadToDependencyTrack == 'true' }}
-    runs-on: [self-hosted, dtrack]
+    runs-on: [ self-hosted, dtrack ]
     steps:
       - uses: actions/checkout@v4
 
@@ -103,7 +103,7 @@ jobs:
           name: sbom-cyclonedx
           path: build/reports
 
-      - name: Upload SBOM to Dependency-Track
+      - name: Upload SBOM and export findings from Dependency-Track
         env:
           DTRACK_URL: ${{ secrets.DTRACK_URL }}
           DTRACK_API_KEY: ${{ secrets.DTRACK_API_KEY }}
@@ -127,19 +127,55 @@ jobs:
 
           test -f "${SBOM_XML}"
 
-          curl -sS -X POST "${DTRACK_URL}/api/v1/bom" \
+          # 1) Upload BOM -> get processing token
+          echo "Uploading BOM for ${PROJECT_NAME}@${PROJECT_VERSION} to ${DTRACK_URL}"
+          TOKEN="$(curl -sS -X POST "${DTRACK_URL}/api/v1/bom" \
             -H "X-Api-Key: ${DTRACK_API_KEY}" \
             -F "projectName=${PROJECT_NAME}" \
             -F "projectVersion=${PROJECT_VERSION}" \
             -F "autoCreate=true" \
-            -F "bom=@${SBOM_XML}" \
-            -o dtrack-upload.json
+            -F "bom=@${SBOM_XML}" | python3 -c 'import sys,json; print(json.load(sys.stdin)["token"])')"
 
-          cat dtrack-upload.json
+          echo "{\"token\":\"${TOKEN}\"}" > dtrack-upload.json
+          echo "BOM token: ${TOKEN}"
 
-      - name: Upload Dependency-Track response
+          # 2) Wait until processing is done (max ~5 min)
+          for i in {1..60}; do
+            STATUS="$(curl -sS -H "X-Api-Key: ${DTRACK_API_KEY}" \
+              "${DTRACK_URL}/api/v1/bom/token/${TOKEN}")"
+            echo "token status: ${STATUS}"
+            echo "${STATUS}" | grep -q '"processing":false' && break
+            sleep 5
+          done
+
+          # 3) Lookup project UUID
+          PROJECT_UUID="$(curl -sS -G "${DTRACK_URL}/api/v1/project/lookup" \
+            -H "X-Api-Key: ${DTRACK_API_KEY}" \
+            --data-urlencode "name=${PROJECT_NAME}" \
+            --data-urlencode "version=${PROJECT_VERSION}" \
+            | python3 -c 'import sys,json; print(json.load(sys.stdin)["uuid"])')"
+
+          echo "Project UUID: ${PROJECT_UUID}"
+
+          # 4) Export findings + vulnerabilities (две разные выборки)
+          curl -sS -H "X-Api-Key: ${DTRACK_API_KEY}" \
+            "${DTRACK_URL}/api/v1/finding/project/${PROJECT_UUID}" \
+            -o dtrack-findings.json
+
+          curl -sS -H "X-Api-Key: ${DTRACK_API_KEY}" \
+            "${DTRACK_URL}/api/v1/vulnerability/project/${PROJECT_UUID}" \
+            -o dtrack-vulnerabilities.json
+
+          # Small sanity output
+          echo "findings bytes: $(stat -c%s dtrack-findings.json || true)"
+          echo "vulns bytes: $(stat -c%s dtrack-vulnerabilities.json || true)"
+
+      - name: Upload Dependency-Track results
         uses: actions/upload-artifact@v4
         with:
-          name: dependency-track-upload
-          path: dtrack-upload.json
+          name: dependency-track-results
+          path: |
+            dtrack-upload.json
+            dtrack-findings.json
+            dtrack-vulnerabilities.json
           retention-days: 7
