@@ -23,7 +23,7 @@ permissions:
   contents: read
 
 env:
-  SBOM_XML: build/reports/cyclonedx/bom.xml
+  SBOM_XML: build/reports/bom.xml
 
 jobs:
   build_sbom:
@@ -58,8 +58,8 @@ jobs:
         with:
           name: sbom-cyclonedx
           path: |
-            build/reports/cyclonedx/
-            build/reports/**/bom.*
+            build/reports/
+            build/reports/bom.*
           retention-days: 7
 
   dependency_check:
