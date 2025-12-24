@@ -4,8 +4,11 @@ import java.math.BigDecimal
 import org.gradle.testing.jacoco.tasks.JacocoCoverageVerification
 import org.gradle.external.javadoc.StandardJavadocDocletOptions
 import org.gradle.api.tasks.javadoc.Javadoc
+import org.owasp.dependencycheck.gradle.extension.DependencyCheckExtension
+import org.owasp.dependencycheck.reporting.ReportGenerator
 
 
+// Applies plugins for build, quality, and reporting
 plugins {
     java
     application
@@ -13,6 +16,8 @@ plugins {
     id("com.diffplug.spotless") version "6.25.0"
     id("com.github.spotbugs") version "6.2.4"
     id("com.github.johnrengelman.shadow") version "8.1.1"
+    id("org.cyclonedx.bom") version "2.4.1"
+    id("org.owasp.dependencycheck") version "12.1.9"
     jacoco
 }
 
@@ -220,4 +225,19 @@ tasks.named<Javadoc>("javadoc") {
 tasks.build {
     // Ensure that the fat JAR is also built as part of the standard build lifecycle
     dependsOn(tasks.shadowJar)
+}
+
+//dependency -check options
+
+val depCheckOutDir = layout.buildDirectory.dir("reports/dependency-check")
+
+configure<DependencyCheckExtension> {
+    // report format (using docs -  HTML/JSON/.../ALL) :contentReference[oaicite:1]{index=1}
+    format = ReportGenerator.Format.ALL.toString()
+
+    // setting putput directory
+    setOutputDirectory(depCheckOutDir.get().asFile.absolutePath)
+
+    //to speed up vulnerabilitues databases download process
+    nvd.apiKey = System.getenv("NVD_API_KEY")
 }

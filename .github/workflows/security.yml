@@ -1,0 +1,151 @@
+name: SBOM + Dependency Scan
+
+on:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      projectName:
+        description: "Dependency-Track project name (default: repo name)"
+        required: false
+      projectVersion:
+        description: "Dependency-Track project version (default: branch name)"
+        required: false
+      runDependencyCheck:
+        description: "Run OWASP Dependency-Check (true/false)"
+        required: false
+        default: "true"
+      uploadToDependencyTrack:
+        description: "Upload SBOM to Dependency-Track (true/false)"
+        required: false
+        default: "true"
+
+permissions:
+  contents: read
+
+env:
+  SBOM_XML: build/reports/cyclonedx/bom.xml
+
+jobs:
+  build_sbom:
+    name: build (Generate SBOM)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x ./gradlew
+
+      - name: Generate CycloneDX SBOM
+        run: ./gradlew --no-daemon cyclonedxBom
+
+      - name: Verify SBOM exists
+        run: |
+          if [ ! -f "${SBOM_XML}" ]; then
+            echo "SBOM not found at ${SBOM_XML}"
+            echo "Listing build/reports:"
+            find build/reports -maxdepth 5 -type f | head -n 200
+            exit 1
+          fi
+
+      - name: Upload SBOM artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom-cyclonedx
+          path: |
+            build/reports/cyclonedx/
+            build/reports/**/bom.*
+          retention-days: 7
+
+  dependency_check:
+    name: security (Dependency-Check)
+    runs-on: ubuntu-latest
+    needs: build_sbom
+    if: ${{ github.event_name == 'pull_request' || github.event.inputs.runDependencyCheck == 'true' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x ./gradlew
+
+      - name: Run OWASP Dependency-Check
+        env:
+          NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
+        run: ./gradlew --no-daemon dependencyCheckAnalyze
+
+      - name: Upload Dependency-Check report
+        uses: actions/upload-artifact@v4
+        with:
+          name: dependency-check-report
+          path: build/reports/dependency-check/
+          retention-days: 7
+
+  upload_to_dependencytrack:
+    name: security (Upload SBOM to Dependency-Track)
+    needs: build_sbom
+    if: ${{ github.event_name == 'pull_request' || github.event.inputs.uploadToDependencyTrack == 'true' }}
+    # ВАЖНО: этот job должен иметь сетевой доступ до Dependency-Track.
+    # Если у тебя DT на Ubuntu VM и доступен как localhost — используй self-hosted runner на этой VM.
+    runs-on: [self-hosted, linux]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Upload SBOM to Dependency-Track
+        env:
+          DTRACK_URL: ${{ secrets.DTRACK_URL }}
+          DTRACK_API_KEY: ${{ secrets.DTRACK_API_KEY }}
+        run: |
+          set -euo pipefail
+
+          # Resolve projectName/projectVersion
+          PROJECT_NAME_INPUT="${{ github.event.inputs.projectName }}"
+          PROJECT_VERSION_INPUT="${{ github.event.inputs.projectVersion }}"
+
+          if [ -n "${PROJECT_NAME_INPUT}" ]; then
+            PROJECT_NAME="${PROJECT_NAME_INPUT}"
+          else
+            PROJECT_NAME="${{ github.event.repository.name }}"
+          fi
+
+          if [ -n "${PROJECT_VERSION_INPUT}" ]; then
+            PROJECT_VERSION="${PROJECT_VERSION_INPUT}"
+          else
+            # PR -> head ref, manual -> ref_name
+            PROJECT_VERSION="${{ github.head_ref || github.ref_name }}"
+          fi
+
+          # Verify SBOM exists
+          if [ ! -f "${SBOM_XML}" ]; then
+            echo "SBOM not found at ${SBOM_XML}"
+            exit 1
+          fi
+
+          # Upload
+          curl -sS -X POST "${DTRACK_URL}/api/v1/bom" \
+            -H "X-Api-Key: ${DTRACK_API_KEY}" \
+            -F "projectName=${PROJECT_NAME}" \
+            -F "projectVersion=${PROJECT_VERSION}" \
+            -F "autoCreate=true" \
+            -F "bom=@${SBOM_XML}" \
+            -o dtrack-upload.json
+
+          echo "Dependency-Track response:"
+          cat dtrack-upload.json
+
+      - name: Upload Dependency-Track response artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dependency-track-upload
+          path: dtrack-upload.json
+          retention-days: 7
