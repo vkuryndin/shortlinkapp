@@ -49,7 +49,7 @@ jobs:
           if [ ! -f "${SBOM_XML}" ]; then
             echo "SBOM not found at ${SBOM_XML}"
             echo "Listing build/reports:"
-            find build/reports -maxdepth 5 -type f | head -n 200
+            find build/reports -maxdepth 3 -type f -print
             exit 1
           fi
 
@@ -57,9 +57,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: sbom-cyclonedx
-          path: |
-            build/reports/
-            build/reports/bom.*
+          path: build/reports/bom.*
           retention-days: 7
 
   dependency_check:
@@ -95,11 +93,15 @@ jobs:
     name: security (Upload SBOM to Dependency-Track)
     needs: build_sbom
     if: ${{ github.event_name == 'pull_request' || github.event.inputs.uploadToDependencyTrack == 'true' }}
-    # ВАЖНО: этот job должен иметь сетевой доступ до Dependency-Track.
-    # Если у тебя DT на Ubuntu VM и доступен как localhost — используй self-hosted runner на этой VM.
-    runs-on: [self-hosted, linux]
+    runs-on: [self-hosted, dtrack]
     steps:
       - uses: actions/checkout@v4
+
+      - name: Download SBOM artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: sbom-cyclonedx
+          path: build/reports
 
       - name: Upload SBOM to Dependency-Track
         env:
@@ -108,7 +110,6 @@ jobs:
         run: |
           set -euo pipefail
 
-          # Resolve projectName/projectVersion
           PROJECT_NAME_INPUT="${{ github.event.inputs.projectName }}"
           PROJECT_VERSION_INPUT="${{ github.event.inputs.projectVersion }}"
 
@@ -121,17 +122,11 @@ jobs:
           if [ -n "${PROJECT_VERSION_INPUT}" ]; then
             PROJECT_VERSION="${PROJECT_VERSION_INPUT}"
           else
-            # PR -> head ref, manual -> ref_name
             PROJECT_VERSION="${{ github.head_ref || github.ref_name }}"
           fi
 
-          # Verify SBOM exists
-          if [ ! -f "${SBOM_XML}" ]; then
-            echo "SBOM not found at ${SBOM_XML}"
-            exit 1
-          fi
+          test -f "${SBOM_XML}"
 
-          # Upload
           curl -sS -X POST "${DTRACK_URL}/api/v1/bom" \
             -H "X-Api-Key: ${DTRACK_API_KEY}" \
             -F "projectName=${PROJECT_NAME}" \
@@ -140,10 +135,9 @@ jobs:
             -F "bom=@${SBOM_XML}" \
             -o dtrack-upload.json
 
-          echo "Dependency-Track response:"
           cat dtrack-upload.json
 
-      - name: Upload Dependency-Track response artifact
+      - name: Upload Dependency-Track response
         uses: actions/upload-artifact@v4
         with:
           name: dependency-track-upload
