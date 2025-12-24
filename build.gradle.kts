@@ -232,12 +232,12 @@ tasks.build {
 val depCheckOutDir = layout.buildDirectory.dir("reports/dependency-check")
 
 configure<DependencyCheckExtension> {
-    // report format (using docs -  HTML/JSON/.../ALL) :contentReference[oaicite:1]{index=1}
+    // report format
     format = ReportGenerator.Format.ALL.toString()
 
     // setting putput directory
     setOutputDirectory(depCheckOutDir.get().asFile.absolutePath)
 
-    //to speed up vulnerabilitues databases download process
+    //to speed up vulnerabilities databases download process
     nvd.apiKey = System.getenv("NVD_API_KEY")
 }
